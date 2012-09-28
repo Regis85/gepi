@@ -227,6 +227,8 @@ $id_lieu=isset($_POST['id_lieu']) ? $_POST['id_lieu'] : NULL;
 
 $avertie=isset($_POST['avertie']) ? $_POST['avertie'] : NULL;
 
+$change_declarant=isset($_POST['change_prof']) ? $_POST['change_prof'] : NULL;
+
 //$mesure_prise=isset($_POST['mesure_prise']) ? $_POST['mesure_prise'] : NULL;
 //$mesure_demandee=isset($_POST['mesure_demandee']) ? $_POST['mesure_demandee'] : NULL;
 $mesure_ele_login=isset($_POST['mesure_ele_login']) ? $_POST['mesure_ele_login'] : NULL;
@@ -258,6 +260,14 @@ if(isset($id_incident)) {
 }
 
 $msg="";
+
+
+// on change le déclarant si demandé
+if (($change_declarant=='Changer') && isset($_POST['choixProf']) && ($_POST['choixProf']!= '0') && ($etat_incident!='clos')) {
+    $sql="UPDATE  s_incidents SET declarant='".$_POST['choixProf']."' WHERE id_incident='".$_POST['id_incident']."'";
+    $test=mysql_query($sql);
+    $msg .= "Déclarant modifié";
+}
 
 if($etat_incident!='clos') {
 	//echo "etat_incident=$etat_incident<br />";
@@ -688,7 +698,14 @@ if($etat_incident!='clos') {
 						$tab_mes_enregistree=array();
 						//$sql="SELECT mesure FROM s_traitement_incident WHERE id_incident='$id_incident' AND login_ele='".$mesure_ele_login[$i]."';";
 						$sql="SELECT id_mesure FROM s_traitement_incident WHERE id_incident='$id_incident' AND login_ele='".$mesure_ele_login[$i]."';";
-						$res_mes=mysql_query($sql);
+				/*
+echo "<pre>
+envoi_mail($subject, 
+$texte_mail, 
+$destinataires, 
+$headers);
+</pre>";
+*/		$res_mes=mysql_query($sql);
 						if(mysql_num_rows($res_mes)>0) {
 							while($lig_mes=mysql_fetch_object($res_mes)) {
 								//$tab_mes_enregistree[]=$lig_mes->mesure;
@@ -754,7 +771,14 @@ if($etat_incident!='clos') {
 										$msg.="Les types autorisés sont ".array_to_chaine($AllowedFilesExtensions)."<br />";
 									}
 								}
-								else {
+						/*
+echo "<pre>
+envoi_mail($subject, 
+$texte_mail, 
+$destinataires, 
+$headers);
+</pre>";
+*/		else {
 									//echo "<p>Le fichier a été uploadé.</p>\n";
 				
 									$source_file=$document_joint['tmp_name'];
@@ -989,14 +1013,7 @@ if($etat_incident!='clos') {
       
 								// On envoie le mail
 								$envoi = envoi_mail($subject, $texte_mail, $destinataires, $headers);
-/*
-echo "<pre>
-envoi_mail($subject, 
-$texte_mail, 
-$destinataires, 
-$headers);
-</pre>";
-*/
+
 							}
 						}
 					}
@@ -1160,7 +1177,39 @@ if($etat_incident!='clos') {
 	//=====================================================
 }
 
-if(isset($id_incident)) {
+if(isset($id_incident) && ($_SESSION['statut']=='cpe')) {
+    if (getSettingAOui('DisciplineCpeChangeDeclarant')) {
+        $sqlProf="SELECT login , nom , prenom FROM utilisateurs WHERE statut='professeur' ORDER BY nom , prenom";
+	// echo "$sqlProf<br />";
+	$resProf=mysql_query($sqlProf);
+?>
+        <form enctype='multipart/form-data' action='saisie_incident.php' method='post' id='change_declare'>
+            <p class='bold'>Changer le déclarant</p>
+            <p>
+                <select id="choixProf" name="choixProf">
+                    <option value='0'>Choisir un déclarant</option>
+<?php
+                    if(mysql_num_rows($resProf)>0){
+                        while($lig_class_tmp=mysql_fetch_object($resProf)){
+?>
+                            <option value='<?php echo $lig_class_tmp->login ?>'>
+                                <?php echo $lig_class_tmp->nom ?> <?php echo $lig_class_tmp->prenom ?>
+                            </option>
+<?php
+                        }
+                    }
+?>
+                </select>
+                <input type='hidden' name='id_incident' value='<?php echo $id_incident ?>' />
+                <input type='hidden' name='step' value='<?php echo $step ?>' />
+                <input type="submit" name="change_prof" value="Changer" />
+            </p>
+        </form>
+<hr />
+<?php
+    }
+    
+    
 	// AFFICHAGE DES PROTAGONISTES (déjà enregistrés) DE L'INCIDENT
 
 	// Récupération des qualités
@@ -1524,9 +1573,6 @@ if($step==0) {
 	echo add_token_field();
 
 	if(isset($_POST['recherche_eleve'])) {
-		//echo " | <a href='saisie_incident.php'>Choisir un autre élève</a>\n";
-		//echo "</p>\n";
-		//echo "</div>\n";
 
 		recherche_ele($rech_nom,$_SERVER['PHP_SELF']);
 		echo "<p class='center'><input type='submit' name='Ajouter' value='Ajouter' /></p>\n";
