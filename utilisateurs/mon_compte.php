@@ -673,58 +673,92 @@ if ($session_gepi->current_auth_mode == "gepi" || $gepiSettings['ldap_write_acce
 	$editable_user = false;
 	$affiche_bouton_submit = 'no';
 }
+?>
+<p class="bold">
+    <a href="../accueil.php"><img src='../images/icons/back.png' alt='Retour' class='back_link'/>Retour</a>
+</p>
 
-echo "<p class=bold><a href=\"../accueil.php\"><img src='../images/icons/back.png' alt='Retour' class='back_link'/> Retour</a></p>\n";
-echo "<form enctype=\"multipart/form-data\" action=\"mon_compte.php\" method=\"post\">\n";
-echo add_token_field();
-echo "<h2>Informations personnelles *</h2>\n";
-
+<h2>Informations personnelles *</h2>
+<form enctype="multipart/form-data" action="mon_compte.php" method="post">
+    <?php echo add_token_field(); ?>
+    
+<?php
 if ($session_gepi->current_auth_mode != "gepi" && $gepiSettings['ldap_write_access'] == "yes") {
-	echo "<p><span style='color: red;'>Note :</span> les modifications de mot de passe et d'email que vous effectuerez sur cette page seront propagées à l'annuaire central, et donc aux autres services qui y font appel.</p>";
+?>
+    <p>
+        <span style='color: red;'>Note :</span>
+        les modifications de mot de passe et d'email que vous effectuerez sur cette page seront propagées à l'annuaire central, 
+        et donc aux autres services qui y font appel.
+    </p>
+<?php
 }
-
-echo "<table summary='Mise en forme'>\n";
-echo "<tr><td>\n";
-	echo "<table summary='Infos'>\n";
-	echo "<tr><td>Identifiant GEPI : </td><td>" . $_SESSION['login']."</td></tr>\n";
-
-	echo "<tr>\n";
-	echo "<td>Civilité : </td>\n";
-	echo "<td>\n";
+?>
+    <table summary='Mise en forme'>
+        <tr>
+            <td>
+                <table summary='Infos'>
+                    <tr>
+                        <td>Identifiant GEPI : </td>
+                        <td><?php echo $_SESSION['login']; ?></td>
+                    </tr>
+                    <tr>
+                        <td>Civilité : </td>
+                        <td>
+<?php
 	if(($_SESSION['statut']=='professeur')||
 		($_SESSION['statut']=='scolarite')||
 		($_SESSION['statut']=='cpe')) {
-
-		echo "<select name='reg_civilite' onchange='changement()'>\n";
-		echo "<option value='M.' ";
-		if ($user_civilite=='M.') {echo " selected ";}
-		echo ">M.</option>\n";
-
-		echo "<option value='Mme' ";
-		if ($user_civilite=='Mme') {echo " selected ";}
-		echo ">Mme</option>\n";
-
-		echo "<option value='Mlle' ";
-		if ($user_civilite=='Mlle') {echo " selected ";}
-		echo ">Mlle</option>\n";
-		echo "</select>\n";
+?>
+                            <select name='reg_civilite' onchange='changement()'>
+                                <option value='M.'<?php if ($user_civilite=='M.') {echo " selected='selected' ";} ?> >M.</option>
+                                <option value='Mme'<?php if ($user_civilite=='Mme') {echo " selected='selected' ";} ?> >Mme</option>
+                                <option value='Mlle'<?php if ($user_civilite=='Mlle') {echo " selected='selected' ";} ?> >Mlle</option>
+                            </select>
+<?php
 	}
 	else {
-		echo $user_civilite;
+?>
+                            <?php echo $user_civilite; ?>
+<?php
 	}
-	echo "</td>\n";
-	echo "</tr>\n";
-
-	echo "<tr><td>Nom : </td><td>".$user_nom."</td></tr>\n";
-	echo "<tr><td>Prénom : </td><td>".$user_prenom."</td></tr>\n";
+?>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Nom : </td>
+                        <td><?php echo $user_nom ?></td>
+                    </tr>
+                    <tr>
+                        <td>Prénom : </td>
+                        <td>".$user_prenom."</td>
+                    </tr>
+<?php
 	if (($editable_user)&&
 		((($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable'))||
 		(getSettingValue('mode_email_resp')!='sconet'))) {
-		echo "<tr><td>Email : </td><td><input type=text name=reg_email size=30";
-		if ($user_email) { echo " value=\"".$user_email."\"";}
-		echo " /></td></tr>\n";
+?>
+                    <tr>
+                        <td>Email : </td>
+                        <td>
+                            <input type=text 
+                                   name=reg_email 
+                                   size=30
+                                   <?php if ($user_email) { echo " value=\"".$user_email."\"";} ?>
+                                   />
+                        </td>
+                    </tr>
+                                   
+<?php
 	} else {
-		echo "<tr><td>Email : </td><td>".$user_email."<input type=\"hidden\" name=\"reg_email\" value=\"".$user_email."\" /></td></tr>\n";
+?>
+                    <tr>
+                        <td>Email : </td>
+                        <td>
+                            <?php echo $user_email ?>
+                            <input type="hidden" name="reg_email" value="<?php echo $user_email ?>" />
+                        </td>
+                    </tr>
+<?php
 	}
 	if ($_SESSION['statut'] == "scolarite" OR $_SESSION['statut'] == "professeur" OR $_SESSION['statut'] == "cpe") {
 		$affiche_bouton_submit = 'yes';
@@ -912,21 +946,7 @@ echo "</table>\n";
 if ($affiche_bouton_submit=='yes') {
 	echo "<p><input type='submit' value='Enregistrer' /></p>\n";
 }
-/*
-//Supp ERIC
-$tab_class_mat =  make_tables_of_classes_matieres();
-if (count($tab_class_mat)!=0) {
-	echo "<br /><br />Vous êtes professeur dans les classes et matières suivantes :";
-	$i = 0;
-	echo "<ul>";
-	while ($i < count($tab_class_mat['id_c'])) {
-		//echo "<li>".$tab_class_mat['nom_m'][$i]." dans la classe : ".$tab_class_mat['nom_c'][$i]."</li>";
-		echo "<li>".$tab_class_mat['nom_c'][$i]." : ".$tab_class_mat['nom_m'][$i]."</li>";
-		$i++;
-	}
-	echo "</ul>";
-}
-*/
+
 
 // AJOUT Eric
 //$groups = get_groups_for_prof($_SESSION["login"]);
@@ -980,57 +1000,102 @@ if ($nombre_classe != "0") {
 	}
 	echo "</ul>\n";
 }
-
-
-
-
-
-echo "<p class='small'>* Toutes les données nominatives présentes dans la base GEPI et vous concernant vous sont communiquées sur cette page.
-Conformément à la loi française n° 78-17 du 6 janvier 1978 relative à l'informatique, aux fichiers et aux libertés,
-vous pouvez demander auprès du Chef d'établissement ou auprès de l'<a href=\"mailto:" . getSettingValue("gepiAdminAdress") . "\">administrateur</a> du site,
-la rectification de ces données.
-Les rectifications sont effectuées dans les 48 heures hors week-end et jours fériés qui suivent la demande.";
+?>
+<p class='small'>
+    * Toutes les données nominatives présentes dans la base GEPI et vous concernant vous sont communiquées sur cette page.
+    <br />
+    Conformément à la loi française n° 78-17 du 6 janvier 1978 relative à l'informatique, aux fichiers et aux libertés,
+    vous pouvez demander auprès du Chef d'établissement ou auprès de l'<a href="mailto:<?php echo getSettingValue("gepiAdminAdress")?>">
+    administrateur</a> du site, la rectification de ces données.
+    <br />
+    Les rectifications sont effectuées dans les 48 heures hors week-end et jours fériés qui suivent la demande.
+</p>
+<?php 
 if ($_SESSION['statut'] == "scolarite" OR $_SESSION['statut'] == "professeur" OR $_SESSION['statut'] == "cpe") {
-	echo "<p class='small'>** Votre email sera affichée sur certaines pages seulement si leur affichage a été activé de manière globale par l'administrateur et si vous avez autorisé l'affichage de votre email en cochant la case appropriée. ";
-	echo "Dans l'hypothèse où vous autorisez l'affichage de votre email, celle-ci ne sera accessible que par les élèves que vous avez en classe et/ou leurs responsables légaux disposant d'un identifiant pour se connecter à Gepi.</p>\n";
+?>
+<p class='small'>
+    ** Votre email sera affichée sur certaines pages seulement si leur affichage a été activé de manière globale par l'administrateur 
+    et si vous avez autorisé l'affichage de votre email en cochant la case appropriée.
+    <br />
+    Dans l'hypothèse où vous autorisez l'affichage de votre email, celle-ci ne sera accessible que par les élèves que vous avez en classe 
+    et/ou leurs responsables légaux disposant d'un identifiant pour se connecter à Gepi.
+</p>
+<?php 
 }
 // Changement du mot de passe
 if ($editable_user) {
-	echo "<hr /><a name=\"changemdp\"></a><H2>Changement du mot de passe</H2>\n";
-	echo "<p><b>Attention : le mot de passe doit comporter ".getSettingValue("longmin_pwd") ." caractères minimum. ";
-	if ($flag == 1)
-		echo "Il doit comporter au moins une lettre, au moins un chiffre et au moins un caractère spécial (#, *,...)";
-	else
-		echo "Il doit comporter au moins une lettre et au moins un chiffre.";
+?>
+<hr />
+<a name="changemdp"></a>
+<H2>Changement du mot de passe</H2>
+<p>
+    <strong>
+        Attention : le mot de passe doit comporter <?php echo getSettingValue("longmin_pwd") ;?> caractères minimum.
+<?php 
+	if ($flag == 1) {
+?>
+        Il doit comporter au moins une lettre, au moins un chiffre et au moins un caractère spécial (#, *,...)
+<?php 
+        } else {
+?>
+        Il doit comporter au moins une lettre et au moins un chiffre.
+<?php 
+        }
+?>
+        <br />
+        <span style='color: red;'>Il est fortement conseillé de ne pas choisir un mot de passe trop simple</span>
+    </strong>
+    .<br />
+    <strong>
+        Votre mot de passe est strictement personnel, vous ne devez pas le diffuser,
+        <span style='color: red;'> il garantit la sécurité de votre travail.</span>
+    </strong>
+</p>
 
-	echo "<br /><span style='color: red;'>Il est fortement conseillé de ne pas choisir un mot de passe trop simple</b>.</span>";
-	echo "<br /><b>Votre mot de passe est strictement personnel, vous ne devez pas le diffuser,<span style='color: red;'> il garantit la sécurité de votre travail.</b></span></p>\n";
-	echo "<script type=\"text/javascript\" src=\"../lib/pwd_strength.js\"></script>";
+<script type="text/javascript" src="../lib/pwd_strength.js"></script>
 
-	echo "<table summary='Mot de passe'><tr>\n";
-	echo "<td>Ancien mot de passe : </td><td><input type=password name=no_anti_inject_password_a size=20 /></td>\n";
-	echo "</tr><tr>\n";
-	echo "<td>Nouveau mot de passe (".getSettingValue("longmin_pwd") ." caractères minimum) :</td>";
-	echo "<td> <input id=\"mypassword\" type=password name=no_anti_inject_password1 size=20 onkeyup=\"runPassword(this.value, 'mypassword');\" />";
-	echo "<td>";
-	echo "Complexité de votre mot de passe : ";
-	echo "		<div style=\"width: 150px;\"> ";
-	echo "			<div id=\"mypassword_text\" style=\"font-size: 11px;\"></div>";
-	echo "			<div id=\"mypassword_bar\" style=\"font-size: 1px; height: 3px; width: 0px; border: 1px solid white;\"></div> ";
-	echo "		</div>";
-	echo "</td>\n";
-	echo "</td>\n";
-	echo "</tr><tr>\n";
-	echo "<td>Nouveau mot de passe (à confirmer) : </td><td><input type=password name=reg_password2 size=20 /></td>\n";
-	echo "</tr></table>\n";
+<table summary='Mot de passe'>
+    <tr>
+        <td>Ancien mot de passe : </td>
+        <td><input type=password name=no_anti_inject_password_a size=20 /></td>
+    </tr>
+    <tr>
+        <td>Nouveau mot de passe (<?php echo getSettingValue("longmin_pwd") ;?> caractères minimum) :</td>
+        <td>
+            <input id="mypassword" 
+                    type="password" 
+                    name="no_anti_inject_password1" 
+                    size="20" 
+                    onkeyup="runPassword(this.value, 'mypassword');" />
+        </td>
+        <td>
+            Complexité de votre mot de passe : 
+            <div style="width: 150px;">
+                <div id="mypassword_text" style="font-size: 11px;"></div>
+                <div id="mypassword_bar" style="font-size: 1px; height: 3px; width: 0px; border: 1px solid white;"></div>
+            </div>
+        </td>
+    </tr>
+    <tr>
+        <td>Nouveau mot de passe (à confirmer) : </td>
+        <td><input type=password name=reg_password2 size=20 /></td>
+    </tr>
+</table>
+<?php
 	if ((isset($_GET['retour'])) or (isset($_POST['retour'])))
-		echo "<input type=\"hidden\" name=\"retour\" value=\"accueil\" />\n";
+?>
+<p><input type="hidden" name="retour" value="accueil" /></p>
+
+<?php
 }
 if ($affiche_bouton_submit=='yes')
-	echo "<br /><center><input type=\"submit\" value=\"Enregistrer\" /></center>\n";
-	echo "<input type=\"hidden\" name=\"valid\" value=\"yes\" />\n";
-echo "</form>\n";
-echo "  <hr />\n";
+?>
+<p class="center"><input type=\"submit\" value=\"Enregistrer\" /></p>
+<p><input type="hidden" name="valid" value="yes" /></p>
+</form>
+<hr />
+
+<?php
 
 
 // On affiche si c'est autorisé
