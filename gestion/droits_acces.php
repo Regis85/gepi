@@ -86,7 +86,6 @@ if(isset($_POST['is_posted'])) {
 	check_token(false);
 }
 
-//=======================================================================================
 
 // DROITS ENSEIGNANT
 
@@ -107,8 +106,8 @@ $texteItem="a accès aux relevés de notes des ".$gepiSettings['denomination_ele
 if (!$droitAffiche->set_entree($statutItem, $titreItem, $texteItem))
   $tbs_message = 'Erreur lors du chargement de '.$titreItem;
 
-//+++++++++++++++++++++++++++
 
+//+++++++++++++++++++++++++++
 $titreItem='';
 $texteItem="";
 if (!$droitAffiche->set_entree($statutItem, $titreItem, $texteItem))
@@ -860,6 +859,15 @@ if(getSettingValue('active_mod_ooo')=='y') {
   if (!$droitAffiche->set_entree($statutItem, $titreItem, $texteItem))
 	$tbs_message = 'Erreur lors du chargement de '.$titreItem;
 }
+
+
+// Discipline
+$titreItem='DisciplineCpeChangeDeclarant';
+$texteItem="a le droit de changer le déclarant d'un incident";
+if (!$droitAffiche->set_entree($statutItem, $titreItem, $texteItem))
+      $tbs_message = 'Erreur lors du chargement de '.$titreItem;
+
+
 //=======================================================================================
 
 // DROITS ADMINISTRATEUR

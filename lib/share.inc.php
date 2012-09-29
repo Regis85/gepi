@@ -218,7 +218,7 @@ function generate_unique_login($_nom, $_prenom, $_mode, $_casse='min') {
 	//==========================
 	// Nettoyage des caractères du nom et du prénom
 
-	$_prenom = remplace_accents($_prenom);
+	$_prenom = remplace_accents(preg_replace("/Æ/","AE",preg_replace("/æ/","ae",preg_replace("/Œ/","OE",preg_replace("/œ/","oe",$_prenom)))));
 
 	$prenoms = explode(" ",$_prenom);
 	$premier_prenom = $prenoms[0];
@@ -227,7 +227,7 @@ function generate_unique_login($_nom, $_prenom, $_mode, $_casse='min') {
 
 	$_prenom = preg_replace("/[^a-zA-Z.\-]/", "", $_prenom);
 
-	$_nom = remplace_accents($_nom);
+	$_nom = remplace_accents(preg_replace("/Æ/","AE",preg_replace("/æ/","ae",preg_replace("/Œ/","OE",preg_replace("/œ/","oe",$_nom)))));
 	$_nom = preg_replace("/[^a-zA-Z.\-]/", "", $_nom);
 
 	//==========================
@@ -1861,17 +1861,21 @@ function accents_enleve($chaine,$mode=''){
  * @param type $chaine La chaine à traiter
  * @return La chaine corrigée
  */
-function nettoyer_caracteres_nom($chaine, $mode="a", $chaine_autres_caracteres_acceptes="", $caractere_remplacement="") {
+function nettoyer_caracteres_nom($chaine, $mode="a", $chaine_autres_caracteres_acceptes="", $caractere_remplacement="", $remplacer_oe_ae="n") {
 	global $liste_caracteres_accentues;
 
-	$retour=preg_replace("/Æ/","AE",preg_replace("/æ/","ae",preg_replace("/Œ/","OE",preg_replace("/œ/","oe",trim(ensure_utf8($chaine))))));
+	// Pour que le tiret soit à la fin si on le met dans $chaine_autres_caracteres_acceptes
+	$chaine_autres_caracteres_acceptes="ÆæŒœ".$chaine_autres_caracteres_acceptes;
+
+	$retour=trim(ensure_utf8($chaine));
+	if($remplacer_oe_ae=="y") {$retour=preg_replace("/Æ/","AE",preg_replace("/æ/","ae",preg_replace("/Œ/","OE",preg_replace("/œ/","oe",$retour))));}
 
 	// Le /u sur les preg_replace permet de traiter correctement des chaines utf8
 	if($mode=='a') {
-		$retour=preg_replace("/[^A-Za-z".$liste_caracteres_accentues.$chaine_autres_caracteres_acceptes."]/u","$caractere_remplacement", $retour);
+		$retour=preg_replace("#[^A-Za-z".$liste_caracteres_accentues.$chaine_autres_caracteres_acceptes."]#u","$caractere_remplacement", $retour);
 	}
 	elseif($mode=='an') {
-		$retour=preg_replace("/[^A-Za-z0-9".$liste_caracteres_accentues.$chaine_autres_caracteres_acceptes."]/u","$caractere_remplacement", $retour);
+		$retour=preg_replace("#[^A-Za-z0-9".$liste_caracteres_accentues.$chaine_autres_caracteres_acceptes."]#u","$caractere_remplacement", $retour);
 	}
 
 	return $retour;
