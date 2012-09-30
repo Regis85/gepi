@@ -993,7 +993,6 @@ echo "background-color: white; ";
 echo "'>Informations personnelles *</legend>\n";
 ?>
 
-
     <?php echo add_token_field(); ?>
     
 <?php

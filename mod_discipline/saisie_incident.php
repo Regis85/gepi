@@ -268,6 +268,14 @@ if (($change_declarant=='Changer') && isset($_POST['choixProf']) && ($_POST['cho
     $sql="UPDATE  s_incidents SET declarant='".$_POST['choixProf']."' WHERE id_incident='".$_POST['id_incident']."'";
     $test=mysql_query($sql);
     $msg .= "Déclarant modifié";
+    // On recherche le primo-déclarant
+    $resPrimo=mysql_query("SELECT primo_declarant FROM s_incidents WHERE id_incident='".$id_incident."'");
+    if (mysql_fetch_object($resPrimo)->primo_declarant == '') {
+        $sql="UPDATE  s_incidents SET primo_declarant ='".$_SESSION['login']."' WHERE id_incident='".$_POST['id_incident']."'";
+        // echo $sql;
+        $test=mysql_query($sql);
+        $msg .= " - Primo-déclarant modifié";
+    }
 }
 
 if($etat_incident!='clos') {
@@ -1109,27 +1117,36 @@ if($etat_incident!='clos') {
 
 if(isset($id_incident) ) {
 	// ===== Pour les CPE, on ajoute la possibilité de changer le déclarant =====
-    if($_SESSION['statut']=='cpe') {
+
+    if($_SESSION['statut']=='cpe' && $step== '2') {
     if (getSettingAOui('DisciplineCpeChangeDeclarant')) {
-        if (getSettingAOui('DisciplineCpeChangeDefaut')) {
-            // ===== Par défaut changement autorisé
-            $sqlProf="SELECT u.login , u.nom , u.prenom FROM utilisateurs u
-                WHERE u.statut='professeur' 
-                    AND u.etat='actif'
-                    AND (u.login = (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger' AND p.value LIKE 'yes')
-                        OR u.login != (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger'))
-                ORDER BY u.nom , u.prenom";
-        } else {
-            // ===== Par défaut changement interdit
-            $sqlProf="SELECT u.login , u.nom , u.prenom FROM utilisateurs u
-                WHERE u.statut='professeur' 
-                    AND u.etat='actif'
-                    AND u.login = (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger' AND p.value LIKE 'yes')
-                ORDER BY u.nom , u.prenom";
+        $peutChanger = FALSE;
+        // On recherche le primo-déclarant
+        $resPrimo=mysql_query("SELECT primo_declarant , declarant FROM s_incidents WHERE id_incident='".$id_incident."'");
+        $response = mysql_fetch_object($resPrimo);
+        if ($response->primo_declarant == $_SESSION['login'] || ($response->primo_declarant == '' && $response->declarant == $_SESSION['login'])) {
+            $peutChanger= TRUE;
         }
-	// echo $sqlProf."<br />";
-	$resProf=mysql_query($sqlProf);
-?>
+        if($peutChanger){
+            if (getSettingAOui('DisciplineCpeChangeDefaut')) {
+                // ===== Par défaut changement autorisé
+                $sqlProf="SELECT u.login , u.nom , u.prenom FROM utilisateurs u
+                    WHERE u.statut='professeur' 
+                        AND u.etat='actif'
+                        AND (u.login = (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger' AND p.value LIKE 'yes')
+                            OR u.login != (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger'))
+                    ORDER BY u.nom , u.prenom";
+            } else {
+                // ===== Par défaut changement interdit
+                $sqlProf="SELECT u.login , u.nom , u.prenom FROM utilisateurs u
+                    WHERE u.statut='professeur' 
+                        AND u.etat='actif'
+                        AND u.login = (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger' AND p.value LIKE 'yes')
+                    ORDER BY u.nom , u.prenom";
+            }
+            // echo $sqlProf."<br />";
+            $resProf=mysql_query($sqlProf);
+    ?>
         <form enctype='multipart/form-data' action='saisie_incident.php' method='post' id='change_declare'>
             <p class='bold'>Changer le déclarant</p>
             <p>
@@ -1155,6 +1172,7 @@ if(isset($id_incident) ) {
         </form>
 <hr />
 <?php
+        }   
     }
   }   
     
