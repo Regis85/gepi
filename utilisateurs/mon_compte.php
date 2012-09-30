@@ -980,7 +980,6 @@ if ($session_gepi->current_auth_mode == "gepi" || $gepiSettings['ldap_write_acce
     <a href="../accueil.php"><img src='../images/icons/back.png' alt='Retour' class='back_link'/>Retour</a>
 </p>
 
-<h2>Informations personnelles *</h2>
 <form enctype="multipart/form-data" action="mon_compte.php" method="post">
 
   
@@ -991,9 +990,8 @@ echo "'>\n";
 echo "<legend style='border: 1px solid grey;";
 //echo "background-image: url(\"../images/background/opacite50.png\"); ";
 echo "background-color: white; ";
-echo "'>Informations personnelles</legend>\n";
+echo "'>Informations personnelles *</legend>\n";
 ?>
-
 
 
     <?php echo add_token_field(); ?>
@@ -1308,7 +1306,6 @@ if ($nombre_classe != "0") {
 	}
 	echo "</ul>\n";
 }
-
 ?>
 <p class='small'>
     * Toutes les données nominatives présentes dans la base GEPI et vous concernant vous sont communiquées sur cette page.
