@@ -884,7 +884,7 @@ if(isset($_POST['choix_encodage_csv'])) {
 			$message_choixEncodageCsv="<p style='color:green'>Enregistrement effectué&nbsp;: ".strftime('%d/%m/%Y à %H:%M:%S').".</p>\n";
 		}
 	}
-}
+} 
 
 
 
@@ -902,6 +902,25 @@ if (isset($_POST['modifier_hauteur_entete'])) {
 		$msg.="Erreur lors de l'enregistrement de la hauteur de l'entête.<br />";
 	}
 }
+
+
+
+
+//===== Discipline : CPE peut changer le déclarant
+
+if (isset($_POST['autorise_cpe_declarant'])) {
+    check_token();
+    
+    $autorisation= isset($_POST['cpePeuChanger']) ? $_POST['cpePeuChanger'] : 'no';
+	if (savePref($_SESSION['login'], 'cpePeuChanger', $autorisation)) {
+		$message_autorise_cpe = "<p style='color: green;'>Modification enregistrée&nbsp;: ".strftime('%d/%m/%Y à %H:%M:%S')."</p>";
+		$msg.="État de l'autorisation pour le CPE de vous changer en déclarant d'incident enregistrée.<br />";
+	}else{
+		$message_autorise_cpe = "<p style='color: red;'>Impossible d'enregistrer la modification&nbsp;: ".strftime('%d/%m/%Y à %H:%M:%S')."</p>";
+		$msg.="Erreur lors de l'enregistrement de l'état de l'autorisation pour le CPE de vous changer en déclarant d'incident.<br />";
+	}
+}
+
 
 
 
@@ -943,7 +962,7 @@ $titre_page = "Gérer son compte";
 require_once("../lib/header.inc.php");
 //**************** FIN EN-TETE *****************
 
-//debug_var();
+// debug_var();
 
 // On initialise un flag pour savoir si l'utilisateur est 'éditable' ou non.
 // Cela consiste à déterminer s'il s'agit d'un utilisateur local ou LDAP, et dans
@@ -1027,7 +1046,7 @@ if ($session_gepi->current_auth_mode != "gepi" && $gepiSettings['ldap_write_acce
                     </tr>
                     <tr>
                         <td>Prénom : </td>
-                        <td>".$user_prenom."</td>
+                        <td><?php echo $user_prenom ?></td>
                     </tr>
 <?php
 	if (($editable_user)&&
@@ -1839,18 +1858,38 @@ if ((getSettingValue('active_mod_discipline')!='n')&&(in_array($_SESSION['statut
 	echo "<p>Lors de la saisie de travail à faire, le texte par défaut proposé sera&nbsp;: <br />\n";
 	echo "<input type='text' name='mod_discipline_travail_par_defaut' value='$mod_discipline_travail_par_defaut' size='30' /><br />\n";
 
+if (getSettingAOui('DisciplineCpeChangeDeclarant')) {
+    $tab_statuts_cpePeuChanger=array('professeur');
+    if(in_array($_SESSION['statut'], $tab_statuts_cpePeuChanger)) {
+?>
+        <label for='cpePeuChanger'>Autoriser les CPE à m'attribuer des déclarations d'incident</label>
+        <input type="checkbox" 
+               id="cpePeuChanger" 
+               name="cpePeuChanger" 
+               value="yes" 
+               <?php if (getPref($_SESSION['login'],'cpePeuChanger' ,'yes' ) && getPref($_SESSION['login'],'cpePeuChanger' ,'no' ) == "yes")
+                       echo " checked='checked'"; ?>
+               />
+        <input type='hidden' name='autorise_cpe_declarant' value='ok' />
+    
+<?php    
+    }
+}
+        
 	echo "<p style='text-align:center;'>\n";
 	echo "<input type='submit' name='Valider' value='Enregistrer' />\n";
 	echo "</p>\n";
 
 	if(isset($message_mod_discipline)) {echo $message_mod_discipline;}
-
+        
 	echo "</fieldset>\n";
 	echo "</form>\n";
 
 	//echo "<hr />\n";
 	echo "<br/>\n";
 }
+
+
 
 //==============================================================================
 
@@ -2025,8 +2064,8 @@ if(in_array($_SESSION['statut'], $tab_statuts_barre)) {
 	//echo "  <hr />\n";
 	echo "<br/>\n";
 }
-
 //==============================================================================
+
 
 if(count($tab_sound)>=0) {
 	$footer_sound_actuel=getPref($_SESSION['login'],'footer_sound',"");

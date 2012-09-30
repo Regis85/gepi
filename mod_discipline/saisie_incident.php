@@ -1107,10 +1107,27 @@ if($etat_incident!='clos') {
 	//=====================================================
 }
 
-if(isset($id_incident) && ($_SESSION['statut']=='cpe')) {
+if(isset($id_incident) ) {
+	// ===== Pour les CPE, on ajoute la possibilité de changer le déclarant =====
+    if($_SESSION['statut']=='cpe') {
     if (getSettingAOui('DisciplineCpeChangeDeclarant')) {
-        $sqlProf="SELECT login , nom , prenom FROM utilisateurs WHERE statut='professeur' ORDER BY nom , prenom";
-	// echo "$sqlProf<br />";
+        if (getSettingAOui('DisciplineCpeChangeDefaut')) {
+            // ===== Par défaut changement autorisé
+            $sqlProf="SELECT u.login , u.nom , u.prenom FROM utilisateurs u
+                WHERE u.statut='professeur' 
+                    AND u.etat='actif'
+                    AND (u.login = (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger' AND p.value LIKE 'yes')
+                        OR u.login != (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger'))
+                ORDER BY u.nom , u.prenom";
+        } else {
+            // ===== Par défaut changement interdit
+            $sqlProf="SELECT u.login , u.nom , u.prenom FROM utilisateurs u
+                WHERE u.statut='professeur' 
+                    AND u.etat='actif'
+                    AND u.login = (SELECT p.login FROM preferences p WHERE p.name='cpePeuChanger' AND p.value LIKE 'yes')
+                ORDER BY u.nom , u.prenom";
+        }
+	// echo $sqlProf."<br />";
 	$resProf=mysql_query($sqlProf);
 ?>
         <form enctype='multipart/form-data' action='saisie_incident.php' method='post' id='change_declare'>
@@ -1139,7 +1156,7 @@ if(isset($id_incident) && ($_SESSION['statut']=='cpe')) {
 <hr />
 <?php
     }
-    
+  }   
     
 	// AFFICHAGE DES PROTAGONISTES (déjà enregistrés) DE L'INCIDENT
 
