@@ -161,6 +161,7 @@ function affiche_devoirs_conteneurs($id_conteneur,$periode_num, &$empty, $ver_pe
 		$id_parent = mysql_result($appel_conteneurs, 0, 'parent');
 		$id_racine = mysql_result($appel_conteneurs, 0, 'id_racine');
 		$nom_conteneur = mysql_result($appel_conteneurs, 0, 'nom_court');
+		$modeBoiteMoy = mysql_result($appel_conteneurs, 0, 'mode');
 		echo "<li>\n";
 		echo htmlspecialchars($nom_conteneur);
 		if ($ver_periode <= 1) {
@@ -172,6 +173,19 @@ function affiche_devoirs_conteneurs($id_conteneur,$periode_num, &$empty, $ver_pe
 		if($ponderation_cont!='0.0') {
 			$message_ponderation="La meilleure note de la ".getSettingValue("gepi_denom_boite")." est pondérée d'un coefficient +$ponderation_cont";
 			echo " - <img src='../images/icons/flag.png' width='17' height='18' alt=\"$message_ponderation\" title=\"$message_ponderation\" />";
+		}
+
+		$sql="SELECT mode FROM cn_conteneurs WHERE id_racine='$id_conteneur';";
+		$res_nb_conteneurs=mysql_query($sql);
+		if(mysql_num_rows($res_nb_conteneurs)>1) {
+			echo " - <a href='add_modif_conteneur.php?id_conteneur=$id_conteneur&mode_navig=retour_index' title=\"";
+			if($modeBoiteMoy==1) {
+				echo "la moyenne s'effectue sur toutes les notes contenues à la racine et dans les ".my_strtolower(getSettingValue("gepi_denom_boite"))."s sans tenir compte des options définies dans ces ".my_strtolower(getSettingValue("gepi_denom_boite"))."s.";
+			}
+			else {
+				echo "la moyenne s'effectue sur toutes les notes contenues à la racine et sur les moyennes des ".my_strtolower(getSettingValue("gepi_denom_boite"))."s en tenant compte des options dans ces ".my_strtolower(getSettingValue("gepi_denom_boite"))."s.";
+			}
+			echo "\">Mode Moy.: $modeBoiteMoy</a>";
 		}
 
 		$appel_dev = mysql_query("select * from cn_devoirs where id_conteneur='$id_cont' order by date");
@@ -294,7 +308,9 @@ function affiche_devoirs_conteneurs($id_conteneur,$periode_num, &$empty, $ver_pe
 					$coef=mysql_result($appel_conteneurs, $i, 'coef');
 					echo " (<i><span title='Coefficient $coef'>$coef</span> ";
 					if($display_bulletin==1) {echo "<img src='../images/icons/visible.png' width='19' height='16' title='$gepi_denom_boite visible sur le bulletin' alt='$gepi_denom_boite visible sur le bulletin' />";}
-					else {echo " <img src='../images/icons/invisible.png' width='19' height='16' title='$gepi_denom_boite non visible sur le bulletin' alt='$gepi_denom_boite non visible sur le bulletin' />\n";}
+					else {echo " <img src='../images/icons/invisible.png' width='19' height='16' title=\"".ucfirst($gepi_denom_boite)." non visible sur le bulletin.
+Cela ne signifie pas que les notes ne sont pas prises en compte dans le calcul de la moyenne.
+En revanche, on n'affiche pas une case spécifique pour ce".((getSettingValue('gepi_denom_boite_genre')=='f') ? "tte" : "")." ".$gepi_denom_boite." dans le bulletin.\" alt='".ucfirst($gepi_denom_boite)." non visible sur le bulletin.' />\n";}
 					echo "</i>)";
 
 					$ponderation_cont=mysql_result($appel_conteneurs, $i, 'ponderation');
@@ -872,7 +888,12 @@ function make_matiere_select_html($link, $id_ref, $current, $year, $month, $day,
 			$link2 = "$link?&amp;year=$year&amp;month=$month&amp;day=$day&amp;login_eleve=$id_ref&amp;id_groupe=$row[0]" . $aff_get_rne;
 		}
 
-		$out_html .= "<option $selected value=\"$link2\">" . htmlspecialchars($row[2] . " - ")." ".$chaine."</option>";
+		$out_html .= "<option $selected value=\"$link2\" title=\"".htmlspecialchars($row[2] . " - ")." ".$chaine;
+		$tmp_tab=get_classes_from_id_groupe($row[0]);
+		if(isset($tmp_tab['classlist_string'])) {
+			$out_html .= " en ".$tmp_tab['classlist_string'];
+		}
+		$out_html .= "\">" . htmlspecialchars($row[2] . " - ")." ".$chaine."</option>";
 	}
 	$out_html .= "\n</select>\n</p>\n
 	
@@ -920,12 +941,22 @@ function make_eleve_select_html($link, $login_resp, $current, $year, $month, $da
 {
 	global $selected_eleve;
 	// $current est le login de l'élève actuellement sélectionné
-	$sql="SELECT e.login, e.nom, e.prenom " .
+	$sql="(SELECT e.login, e.nom, e.prenom " .
 			"FROM eleves e, resp_pers r, responsables2 re " .
 			"WHERE (" .
 			"e.ele_id = re.ele_id AND " .
 			"re.pers_id = r.pers_id AND " .
-			"r.login = '".$login_resp."' AND (re.resp_legal='1' OR re.resp_legal='2'));";
+			"r.login = '".$login_resp."' AND (re.resp_legal='1' OR re.resp_legal='2')))";
+	if(getSettingAOui('GepiMemesDroitsRespNonLegaux')) {
+		$sql.=" UNION (SELECT e.login, e.nom, e.prenom FROM eleves e, resp_pers r, responsables2 re 
+						WHERE (e.ele_id = re.ele_id AND 
+							re.pers_id = r.pers_id AND 
+							r.login = '".$login_resp."' AND 
+							re.acces_sp='y' AND
+							re.resp_legal='0'))";
+	}
+	$sql.=";";
+	//echo "$sql<br />";
 	$get_eleves = mysql_query($sql);
 
 	if (mysql_num_rows($get_eleves) == 0) {
@@ -1251,7 +1282,7 @@ function journal_connexions($login,$duree,$page='mon_compte',$pers_id=NULL) {
 <li>Les lignes en <span style='color:black; font-weight:bold;'>noir</span> signalent une <span style='color:black; font-weight:bold;'>session close normalement</span>.</li>
 <li>Les lignes en <span style='color:green; font-weight:bold;'>vert</span> indiquent les <span style='color:green; font-weight:bold;'>sessions en cours</span> (<em>cela peut correspondre à une connexion actuellement close mais pour laquelle vous ne vous êtes pas déconnecté correctement</em>).</li>
 </ul>
-<table class='col' style='width: 90%; margin-left: auto; margin-right: auto; margin-bottom: 32px;' cellpadding='5' cellspacing='0' summary='Connexions'>
+<table class='boireaus' style='width: 90%; margin-left: auto; margin-right: auto; margin-bottom: 32px;' cellpadding='5' cellspacing='0' summary='Connexions'>
 	<tr>
 		<th class='col'>Début session</th>
 		<th class='col'>Fin session</th>
@@ -1262,6 +1293,7 @@ function journal_connexions($login,$duree,$page='mon_compte',$pers_id=NULL) {
 
 	$res = sql_query($sql);
 	if ($res) {
+		$alt=1;
 		for ($i = 0; ($row = sql_row($res, $i)); $i++)
 		{
 			$annee_b = mb_substr($row[0],0,4);
@@ -1296,10 +1328,11 @@ function journal_connexions($login,$duree,$page='mon_compte',$pers_id=NULL) {
 
 			}
 
-			echo "<tr>\n";
+			$alt=$alt*(-1);
+			echo "<tr class='lig$alt white_hover'>\n";
 			echo "<td class=\"col\">".$temp1.$date_debut.$temp2."</td>\n";
-			if ($row[4] == 2) {
-				echo "<td class=\"col\">".$temp1."Tentative de connexion<br />avec mot de passe erroné.".$temp2."</td>\n";
+			if ($row[4] == 4) {
+				echo "<td class=\"col\">".$temp1.$date_fin."<br />Tentative de connexion<br />avec mot de passe erroné.".$temp2."</td>\n";
 			}
 			else {
 				echo "<td class=\"col\">".$temp1.$date_fin.$temp2."</td>\n";
@@ -1390,18 +1423,19 @@ function affiche_infos_actions() {
 	$sql="SELECT ia.* FROM infos_actions ia, infos_actions_destinataires iad WHERE
 	ia.id=iad.id_info AND
 	((iad.nature='individu' AND iad.valeur='".$_SESSION['login']."') OR
-	(iad.nature='statut' AND iad.valeur='".$_SESSION['statut']."'));";
+	(iad.nature='statut' AND iad.valeur='".$_SESSION['statut']."')) ORDER BY date;";
     
 	$res=mysql_query($sql);
 	$chaine_id="";
 	if(mysql_num_rows($res)>0) {
 		echo "<div id='div_infos_actions' style='width: 60%; border: 2px solid red; padding:3px; margin-left: 20%;'>\n";
-		echo "<div id='info_action_titre' style='font-weight: bold;' class='infobulle_entete'>\n";
-			echo "<div id='info_action_pliage' style='float:right; width: 1em'>\n";
+		echo "<div id='info_action_titre' style='font-weight: bold; min-height:16px; padding-right:8px;' class='infobulle_entete'>\n";
+			echo "<div id='info_action_pliage' style='float:right; width: 1em;'>\n";
 			echo "<a href=\"javascript:div_alterne_affichage('conteneur')\"><span id='img_pliage_conteneur'><img src='images/icons/remove.png' width='16' height='16' /></span></a>";
 			echo "</div>\n";
 
-			if($_SESSION['statut']=='administrateur') {
+			//if($_SESSION['statut']=='administrateur') {
+			if(acces("/gestion/gestion_infos_actions.php", $_SESSION['statut'])) {
 				echo "<div style='float:right; width: 1em; margin-right:0.5em;'>\n";
 				echo "<a href=\"gestion/gestion_infos_actions.php\"><span id='img_pliage_conteneur'><img src='images/disabled.png' width='16' height='16' /></span></a>";
 				echo "</div>\n";
@@ -1414,9 +1448,9 @@ function affiche_infos_actions() {
 
 		$cpt_id=0;
 		while($lig=mysql_fetch_object($res)) {
-			echo "<div id='info_action_$lig->id' style='border: 1px solid black; margin:2px;'>\n";
-				echo "<div id='info_action_titre_$lig->id' style='font-weight: bold;' class='infobulle_entete'>\n";
-					echo "<div id='info_action_pliage_$lig->id' style='float:right; width: 1em'>\n";
+			echo "<div id='info_action_$lig->id' style='border: 1px solid black; margin:2px; min-height:16px;'>\n";
+				echo "<div id='info_action_titre_$lig->id' style='font-weight: bold; min-height:16px; padding-right:8px;' class='infobulle_entete'>\n";
+					echo "<div id='info_action_pliage_$lig->id' style='float:right; width: 1em;'>\n";
 					echo "<a href=\"javascript:div_alterne_affichage('$lig->id')\"><span id='img_pliage_$lig->id'><img src='images/icons/remove.png' width='16' height='16' /></span></a>";
 					echo "</div>\n";
 					echo $lig->titre;
@@ -1427,7 +1461,7 @@ function affiche_infos_actions() {
 					echo "<a href=\"".$_SERVER['PHP_SELF']."?del_id_info=$lig->id".add_token_in_url()."\" onclick=\"return confirmlink(this, '".traitement_magic_quotes($lig->titre)."', 'Etes-vous sûr de vouloir supprimer ".traitement_magic_quotes($lig->titre)."')\">Supprimer</span></a>";
 					echo "</div>\n";
 
-					echo nl2br($lig->description);
+					echo preg_replace("/\\\\n/","<br />",nl2br($lig->description));
 				echo "</div>\n";
 			echo "</div>\n";
 			if($cpt_id>0) {$chaine_id.=", ";}
@@ -2013,7 +2047,7 @@ function insere_lien_insertion_image_dans_ckeditor($url_img) {
  * @return string : Chaine HTML <div float:right...><a href...><img...></a></div>
 */
 function insere_lien_insertion_lien_geogebra_dans_ckeditor($titre_ggb, $url_ggb) {
-	return "<div style='float:right; width:18px;'><a href=\"javascript:insere_lien_ggb_dans_ckeditor('".$titre_ggb."', '".$url_ggb."')\" title='Insérer un lien vers le visionneur GeoGebra pour ce fichier GGB'><img src='../images/up.png' width='18' height='18' alt='Insérer un lien vers le visionneur GeoGebra pour ce fichier GGB' /></a></div>";
+	return "<div style='float:right; width:18px;'><a href=\"javascript:insere_lien_ggb_dans_ckeditor('".preg_replace("/'/", " ", $titre_ggb)."', '".$url_ggb."')\" title='Insérer un lien vers le visionneur GeoGebra pour ce fichier GGB'><img src='../images/up.png' width='18' height='18' alt='Insérer un lien vers le visionneur GeoGebra pour ce fichier GGB' /></a></div>";
 }
 
 /** fonction alertant sur la configuration de suhosin
@@ -2283,6 +2317,55 @@ function get_infos_derniere_maj_sconet() {
 
 		//$retour.=$lig->texte;
 	}
+	return $retour;
+}
+
+
+/** Retourne le lien HTML pour un histogramme des notes passées en paramètre
+ *  et génère le DIV infobulle du graphe SVG.
+ *
+ * @param array $tab_graph_note : Le tableau des notes
+ * @param string $titre : Titre de l'infobulle
+ * @param string $id : Identifiant de l'infobulle
+ *
+ * @return string Retourne le lien
+ */
+function retourne_html_histogramme_svg($tab_graph_note, $titre, $id, $nb_tranches=5, $note_sur=20, $graphe_largeurTotale=200, $graphe_hauteurTotale=150, $graphe_taille_police=3, $graphe_epaisseur_traits=2) {
+	global $tabdiv_infobulle;
+
+	$retour="";
+
+	$graphe_serie="";
+	if(isset($tab_graph_note)) {
+		for($l=0;$l<count($tab_graph_note);$l++) {
+			if($l>0) {$graphe_serie.="|";}
+			$graphe_serie.=$tab_graph_note[$l];
+		}
+	}
+
+	$texte="<div align='center'><object data='../lib/graphe_svg.php?";
+	$texte.="serie=$graphe_serie";
+	$texte.="&amp;note_sur_serie=$note_sur";
+	$texte.="&amp;nb_tranches=$nb_tranches";
+	$texte.="&amp;titre=Repartition_des_notes";
+	$texte.="&amp;v_legend1=Notes";
+	$texte.="&amp;v_legend2=Effectif";
+	$texte.="&amp;largeurTotale=$graphe_largeurTotale";
+	$texte.="&amp;hauteurTotale=$graphe_hauteurTotale";
+	$texte.="&amp;taille_police=$graphe_taille_police";
+	$texte.="&amp;epaisseur_traits=$graphe_epaisseur_traits";
+	$texte.="'";
+	$texte.=" width='$graphe_largeurTotale' height='$graphe_hauteurTotale'";
+	$texte.=" type=\"image/svg+xml\"></object></div>\n";
+
+	$tabdiv_infobulle[]=creer_div_infobulle($id,$titre,"",$texte,"",14,0,'y','y','n','n');
+
+	$retour.=" <a href='#' onmouseover=\"delais_afficher_div('$id','y',-100,20,1500,10,10);\"";
+	$retour.=" onclick=\"afficher_div('$id','y',-100,20);return false;\"";
+	$retour.=">";
+	$retour.="<img src='../images/icons/histogramme.png' alt=\"$titre\" />";
+	$retour.="</a>";
+
 	return $retour;
 }
 

@@ -1041,9 +1041,12 @@ if((!isset($mode))||($mode=="suppr_sanction")||($mode=="suppr_report")) {
 
 						$texte=nl2br($lig_sanction->travail);
 						$tmp_doc_joints=liste_doc_joints_sanction($lig_sanction->id_sanction);
+                        
+                        $texte.="<br />À apporter&nbsp;: ".$lig_sanction->materiel."<br />";
+                        
 						if($tmp_doc_joints!="") {
 							if($texte!="") {$texte.="<br />";}
-							$texte.="<b>Documents joints</b>&nbsp;:<br />";
+							$texte.="<strong>Documents joints</strong>&nbsp;:<br />";
 							$texte.=$tmp_doc_joints;
 						}
 
@@ -1067,7 +1070,19 @@ if((!isset($mode))||($mode=="suppr_sanction")||($mode=="suppr_report")) {
 						
 						echo "<td>";
 						if ($gepiSettings['active_mod_ooo'] == 'y') { //impression avec mod_ooo
-							echo "<a href='../mod_ooo/retenue.php?mode=module_retenue&amp;id_incident=$id_incident&amp;id_sanction=$lig_sanction->id_sanction&amp;ele_login=$lig->login".add_token_in_url()."' title='Imprimer la retenue'><img src='../images/icons/print.png' width='16' height='16' alt='Imprimer Retenue' /></a>\n";
+							//echo "<a href='../mod_ooo/retenue.php?mode=module_retenue&amp;id_incident=$id_incident&amp;id_sanction=$lig_sanction->id_sanction&amp;ele_login=$lig->login".add_token_in_url()."' title='Imprimer la retenue'><img src='../images/icons/print.png' width='16' height='16' alt='Imprimer Retenue' /></a>\n";
+
+							if(responsables_adresses_separees($lig->login)) {
+								$tmp_tab_resp=get_resp_from_ele_login($lig->login);
+								for($loop_resp=0;$loop_resp<count($tmp_tab_resp);$loop_resp++) {
+									if($loop_resp>0) {echo "&nbsp;";}
+									echo "<a href='../mod_ooo/retenue.php?mode=module_retenue&amp;id_incident=$id_incident&amp;id_sanction=$lig_sanction->id_sanction&amp;ele_login=$lig->login&amp;pers_id=".$tmp_tab_resp[$loop_resp]['pers_id'].add_token_in_url()."' title=\"Imprimer la retenue pour ".$tmp_tab_resp[$loop_resp]['designation']."\"><img src='../images/icons/print.png' width='16' height='16' alt='Imprimer Retenue' /></a>\n";
+								}
+							}
+							else {
+								echo "<a href='../mod_ooo/retenue.php?mode=module_retenue&amp;id_incident=$id_incident&amp;id_sanction=$lig_sanction->id_sanction&amp;ele_login=$lig->login".add_token_in_url()."' title='Imprimer la retenue'><img src='../images/icons/print.png' width='16' height='16' alt='Imprimer Retenue' /></a>\n";
+							}
+
 						}
 						else {
 							echo "-";
@@ -1117,7 +1132,7 @@ if((!isset($mode))||($mode=="suppr_sanction")||($mode=="suppr_report")) {
 						$tmp_doc_joints=liste_doc_joints_sanction($lig_sanction->id_sanction);
 						if($tmp_doc_joints!="") {
 							if($texte!="") {$texte.="<br />";}
-							$texte.="<b>Documents joints</b>&nbsp;:<br />";
+							$texte.="<strong>Documents joints</strong>&nbsp;:<br />";
 							$texte.=$tmp_doc_joints;
 						}
 						$tabdiv_infobulle[]=creer_div_infobulle("div_travail_sanction_$lig_sanction->id_sanction","Travail (sanction n°$lig_sanction->id_sanction)","",$texte,"",20,0,'y','y','n','n');
@@ -1167,7 +1182,7 @@ if((!isset($mode))||($mode=="suppr_sanction")||($mode=="suppr_report")) {
 						$tmp_doc_joints=liste_doc_joints_sanction($lig_sanction->id_sanction);
 						if($tmp_doc_joints!="") {
 							if($texte!="") {$texte.="<br />";}
-							$texte.="<b>Documents joints</b>&nbsp;:<br />";
+							$texte.="<strong>Documents joints</strong>&nbsp;:<br />";
 							$texte.=$tmp_doc_joints;
 						}
 						$tabdiv_infobulle[]=creer_div_infobulle("div_travail_sanction_$lig_sanction->id_sanction","Travail (sanction n°$lig_sanction->id_sanction)","",$texte,"",20,0,'y','y','n','n');

@@ -653,7 +653,7 @@ echo "		}
 
 if($num_resp==0){
 	echo "<div style='text-align:center;'>\n";
-	echo "<a href='#' onClick=\"document.getElementById('div_rech').style.display=''; document.getElementById('val_rech').focus(); return false;\">Chercher</a>\n";
+	echo "<a href='#' onClick=\"document.getElementById('div_rech').style.display=''; document.getElementById('val_rech').focus(); return false;\" title='Chercher un responsable'><img src='../images/icons/chercher.png' width='16' height='16' alt='Chercher' />&nbsp;Chercher</a>\n";
 	echo "<div id='div_rech' align='center'>\n";
 	echo "<table border='0' summary='Recherche'><tr><td>les personnnes dont le \n";
 	echo "<input type='hidden' name='champ_rech' value='resp0' />\n";
@@ -727,7 +727,7 @@ if($num_resp==0){
 }
 else{
 	echo "<div style='text-align:center;'>\n";
-	echo "<a href='#' onClick=\"document.getElementById('div_rech').style.display=''; document.getElementById('val_rech').focus(); return false;\">Chercher</a>\n";
+	echo "<a href='#' onClick=\"document.getElementById('div_rech').style.display=''; document.getElementById('val_rech').focus(); return false;\" title='Chercher un responsable'><img src='../images/icons/chercher.png' width='16' height='16' alt='Chercher' />&nbsp;Chercher</a>\n";
 	echo "<div id='div_rech' align='center'>\n";
 	echo "<table border='0' summary='Recherche'><tr><td>parmi les </td>\n";
 	echo "<td>\n";
@@ -943,6 +943,9 @@ if("$num_resp"=="0"){
 
 		echo "<table class='boireaus' align='center' summary='Responsables'>\n";
 
+		if($_SESSION['statut']=='administrateur') {$avec_lien="y";}
+		else {$avec_lien="n";}
+
 		while($lig1=mysql_fetch_object($res1)){
 			//$sql="SELECT 1=1 FROM responsables2 r WHERE r.pers_id='$lig1->pers_id'";
 			//$test=mysql_query($sql);
@@ -971,8 +974,10 @@ if("$num_resp"=="0"){
 				if($lig1->civilite!=""){echo "$lig1->civilite \n";}
 				echo "$lig1->nom $lig1->prenom</a>\n";
 
-				$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig1->login, "responsable", "", "n");
-				if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+				if($lig1->login!="") {
+					$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig1->login, "responsable", "_blank", $avec_lien);
+					if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+				}
 
 				echo "</td>\n";
 
@@ -1132,6 +1137,8 @@ else{
 		if(mysql_num_rows($res1)){
 			$alt=1;
 			$cpt=0;
+			if($_SESSION['statut']=='administrateur') {$avec_lien="y";}
+			else {$avec_lien="n";}
 			while($lig1=mysql_fetch_object($res1)){
 
 				if($cpt%10==0){
@@ -1179,9 +1186,10 @@ else{
 							if($lig2->civilite!=""){echo "$lig2->civilite \n";}
 							echo "$lig2->nom $lig2->prenom</a>\n";
 
-							$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig2->login, "responsable", "", "n");
-							if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
-
+							if($lig2->login!="") {
+								$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig2->login, "responsable", "_blank", $avec_lien);
+								if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+							}
 							echo "</td>\n";
 
 							echo "<td style='text-align:center;'";
@@ -1218,7 +1226,7 @@ else{
 									}
 									echo "<td style='text-align:center;'><a href='../eleves/modify_eleve.php?eleve_login=$lig3->login&amp;quelles_classes=toutes&amp;order_type=nom,prenom'>$lig3->nom $lig3->prenom</a>";
 
-									$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig3->login, "eleve", "", "n");
+									$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig3->login, "eleve", "_blank", $avec_lien);
 									if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
 
 									echo "<br />".liens_class_from_ele_login($lig3->login);
@@ -1246,8 +1254,10 @@ else{
 											if($lig4->civilite!=""){echo "$lig4->civilite \n";}
 											echo "$lig4->nom $lig4->prenom</a>\n";
 
-											$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig4->login, "responsable", "", "n");
-											if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+											if($lig4->login!="") {
+												$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig4->login, "responsable", "_blank", $avec_lien);
+												if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+											}
 
 											echo "</td>\n";
 
@@ -1338,6 +1348,8 @@ else{
 									ORDER BY $order_by";
 				$res2=mysql_query($sql);
 				if(mysql_num_rows($res2)>0){
+					if($_SESSION['statut']=='administrateur') {$avec_lien="y";}
+					else {$avec_lien="n";}
 					while($lig2=mysql_fetch_object($res2)){
 						$sql="SELECT DISTINCT e.ele_id,e.login,e.nom,e.prenom FROM responsables2 r, eleves e WHERE r.pers_id='$lig1->pers_id' AND r.resp_legal='$num_resp' AND r.ele_id=e.ele_id";
 						$res3=mysql_query($sql);
@@ -1356,7 +1368,7 @@ else{
 									}
 
 
-									$sql="SELECT rp.nom,rp.prenom,rp.civilite,r.*,ra.* FROM resp_pers rp, responsables2 r, resp_adr ra WHERE
+									$sql="SELECT rp.login, rp.nom,rp.prenom,rp.civilite,r.*,ra.* FROM resp_pers rp, responsables2 r, resp_adr ra WHERE
 										rp.pers_id=r.pers_id AND
 										rp.adr_id=ra.adr_id AND
 										r.ele_id='$lig3->ele_id' AND
@@ -1370,8 +1382,10 @@ else{
 											if($lig4->civilite!=""){echo "$lig4->civilite \n";}
 											echo "$lig4->nom $lig4->prenom</a>\n";
 
-											$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig4->login, "responsable", "", "n");
-											if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+											if($lig4->login!="") {
+												$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig4->login, "responsable", "_blank", $avec_lien);
+												if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+											}
 
 											echo "</td>\n";
 
@@ -1405,7 +1419,7 @@ else{
 
 									echo "<td style='text-align:center;'><a href='../eleves/modify_eleve.php?eleve_login=$lig3->login&amp;quelles_classes=toutes&amp;order_type=nom,prenom'>$lig3->nom $lig3->prenom</a>";
 
-									$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig3->login, "eleve", "", "n");
+									$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig3->login, "eleve", "_blank", $avec_lien);
 									if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
 
 									echo "</td>\n";
@@ -1423,8 +1437,10 @@ else{
 										if($lig2->civilite!=""){echo "$lig2->civilite \n";}
 										echo "$lig2->nom $lig2->prenom</a>\n";
 
-										$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig2->login, "responsable", "", "n");
-										if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+										if($lig2->login!="") {
+											$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig2->login, "responsable", "_blank", $avec_lien);
+											if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+										}
 
 										echo "</td>\n";
 
@@ -1536,6 +1552,8 @@ else{
 		if(mysql_num_rows($res1)>0){
 			$cpt=0;
 			$alt=1;
+			if($_SESSION['statut']=='administrateur') {$avec_lien="y";}
+			else {$avec_lien="n";}
 			while($lig1=mysql_fetch_object($res1)){
 
 				if($cpt%10==0){
@@ -1572,8 +1590,10 @@ else{
 						if($lig2->civilite!=""){echo "$lig2->civilite \n";}
 						echo "$lig2->nom $lig2->prenom</a>\n";
 
-						$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig2->login, "responsable", "", "n");
-						if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+						if($lig2->login!="") {
+							$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig2->login, "responsable", "_blank", $avec_lien);
+							if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+						}
 
 						echo "</td>\n";
 
@@ -1600,7 +1620,7 @@ else{
 
 				echo "<td style='text-align:center;'><a href='../eleves/modify_eleve.php?eleve_login=$lig1->login&amp;quelles_classes=toutes&amp;order_type=nom,prenom'>$lig1->nom $lig1->prenom</a>";
 
-				$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig1->login, "eleve", "", "n");
+				$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig1->login, "eleve", "_blank", $avec_lien);
 				if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
 
 				echo "</td>\n";
@@ -1620,8 +1640,10 @@ else{
 					if($lig3->civilite!=""){echo "$lig3->civilite \n";}
 					echo "$lig3->nom $lig3->prenom</a>\n";
 
-					$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig3->login, "responsable", "", "n");
-					if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+					if($lig3->login!="") {
+						$lien_image_compte_utilisateur=lien_image_compte_utilisateur($lig3->login, "responsable", "_blank", $avec_lien);
+						if($lien_image_compte_utilisateur!="") {echo " ".$lien_image_compte_utilisateur;}
+					}
 
 					echo "</td>\n";
 

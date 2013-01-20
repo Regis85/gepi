@@ -131,6 +131,16 @@ foreach ($groups as $group_iter) {
 	if(mysql_num_rows($test_grp_visib)==0) {
 		echo "<option id='colonne_droite_select_group_option_".$group_iter->getId()."' value='".$group_iter->getId()."'";
 		if ($groupe->getId() == $group_iter->getId()) echo " SELECTED ";
+
+		echo " title=\"".$group_iter->getName()." - ".$group_iter->getDescriptionAvecClasses()." (";
+		$cpt_prof=0;
+		foreach($group_iter->getProfesseurs() as $prof) {
+			if($cpt_prof>0) {echo ", ";}
+			echo casse_mot($prof->getNom(),"maj")." ".casse_mot($prof->getPrenom(),"majf2");
+			$cpt_prof++;
+		}
+		echo ").\"";
+
 		echo ">";
 		echo $group_iter->getDescriptionAvecClasses();
 		echo "</option>\n";
@@ -352,6 +362,9 @@ if ($succes_modification == 'oui') $label_enregistrer='Succès';
 </td>
 </tr>
 </table>
+
+<p style='text-indent:-4em; margin-left:4em;'><em>NOTE&nbsp;:</em> Il ne faut pas saisir en notice privée d'informations concernant des élèves en particulier.<br />
+Comme ces notices ne sont pas rattachées à un élève en particulier, il n'est pas possible d'assurer simplement le droit d'accès des parents/élèves à leurs données si elles sont inscrites en Notices privées.</p>
 <?php echo "</form>";
 echo "</fieldset>";
 

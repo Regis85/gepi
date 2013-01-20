@@ -1430,11 +1430,24 @@ if(isset($id_incident) ) {
                         ||($_SESSION['statut']=='administrateur')||($_SESSION['statut']=='scolarite')||($_SESSION['statut']=='cpe'))) {
                     echo "<td id='td_retenue_$cpt'>";
                     if ($lig->qualite=='Responsable') { //une retenue seulement pour un responsable !
+                        if(responsables_adresses_separees($lig->login)) {
+                            $tmp_tab_resp=get_resp_from_ele_login($lig->login);
+                            for($loop_resp=0;$loop_resp<count($tmp_tab_resp);$loop_resp++) {
+                                if($loop_resp>0) {echo "&nbsp;";}
+?>
+            <a href='../mod_ooo/retenue.php?mode=module_discipline&amp;id_incident=<?php echo $id_incident; ?>&amp;ele_login=<?php echo $lig->login."&amp;pers_id=".$tmp_tab_resp[$loop_resp]['pers_id'].add_token_in_url(); ?>' title="Imprimer la retenue pour <?php echo $tmp_tab_resp[$loop_resp]['designation'];?>">
+                <img src='../images/icons/print.png' width='16' height='16' alt='Imprimer Retenue' />
+            </a>
+<?php
+                            }
+                        }
+                        else {
 ?>
             <a href='../mod_ooo/retenue.php?mode=module_discipline&amp;id_incident=<?php echo $id_incident; ?>&amp;ele_login=<?php echo $lig->login.add_token_in_url(); ?>' title='Imprimer la retenue'>
                 <img src='../images/icons/print.png' width='16' height='16' alt='Imprimer Retenue' />
             </a>
 <?php
+                        }
                     }
 ?>
         </td>
@@ -2444,15 +2457,27 @@ new Ajax.Autocompleter (
                     Description de l'incident&nbsp;:&nbsp;
                     <div id='div_avertissement_description' style='float:right;'>
                         <a href='#' 
-                           onclick="return false;" 
+                           onclick="afficher_div('div_explication_description','y',10,-40);return false;" 
                            onmouseover="delais_afficher_div('div_explication_description','y',10,-40,<?php echo $delais_affichage_infobulle; ?>,<?php echo $largeur_survol_infobulle; ?>,<?php echo $hauteur_survol_infobulle; ?>);" 
+                           >
+                           <!--
                            onmouseout="cacher_div('div_explication_description')">
+                           -->
                             <img src='../images/icons/ico_question_petit.png' width='15' height='15' alt='Description' />
                         </a>
                     </div>
 <?php
-	$texte="Récit détaillé des faits (paroles prononcées, gestes, réactions, ...)<br />";
-	$tabdiv_infobulle[]=creer_div_infobulle('div_explication_description',"Description de l'incident","",$texte,"",18,0,'y','y','n','n');	
+	$texte="Récit détaillé des faits (<em>paroles prononcées, gestes, réactions,...</em>)<br />";
+	$texte.="<br />";
+	//$texte.="Que ce compte-rendu soit visible ou non par défaut des parents des élèves concernés, retenez qu'ils ont le droit d'après la CNIL de réclamer l'accès à ces données.<br />";
+	$texte.="Veillez donc à respecter les préconisations suivantes&nbsp;:<br />";
+
+	$texte.="<strong>Règle n° 1 :</strong> Avoir à l'esprit, quand on renseigne ces zones commentaires, que la personne qui est concernée peut exercer son droit d'accès et lire ces commentaires !<br />";
+	$texte.="<strong>Règle n° 2 :</strong> Rédiger des commentaires purement objectifs et jamais excessifs ou insultants.<br />";
+	$texte.="<br />";
+	$texte.="Pour plus de détails, consultez <a href='http://www.cnil.fr/la-cnil/actualite/article/article/zones-bloc-note-et-commentaires-les-bons-reflexes-pour-ne-pas-deraper/' target='_blank'>l'article de la CNIL</a>?<br />";
+
+	$tabdiv_infobulle[]=creer_div_infobulle('div_explication_description',"Description de l'incident","",$texte,"",30,0,'y','y','n','n');
 ?>
                 </td>
                 <td style='text-align:left;'<?php if($etat_incident!='clos') {if ($autorise_commentaires_mod_disc !="yes") echo " colspan='2'";} ?>>
@@ -2750,7 +2775,7 @@ setTimeout('comptage_caracteres_textarea()', 1000);
 						$texte_travail=$lig_travail_mesure_demandee->travail;
 					}
 ?>
-                                <textarea name='no_anti_inject_travail_pour_mesure_demandee_<?php echo $i; ?>' 
+                   <textarea name='no_anti_inject_travail_pour_mesure_demandee_<?php echo $i; ?>' 
                                           id='travail_pour_mesure_demandee_<?php echo $i; ?>' 
                                           cols='30' 
                                           rows='5' ><?php echo $texte_travail; ?></textarea>
@@ -2862,7 +2887,7 @@ Ne faites pas de modification dans les deux formulaires sans valider entre les d
 <?php
 	if($etat_incident!='clos') {
 ?>
-    <script type='text/javascript'>
+    <script type="text/javascript">
 //<![CDATA[
 	function verif_details_incident() {
 <?php
@@ -2892,7 +2917,7 @@ Ne faites pas de modification dans les deux formulaires sans valider entre les d
 	function check_coche_mes_demandee(num) {
 		if(document.getElementById('document_joint_'+num)) {
 			temoin_check='n';
-			for(i=0;i<".count($tab_mes_demandee).";i++) {
+			for(i=0;i < <?php echo count($tab_mes_demandee); ?> ;i++) {
 				if(document.getElementById('mesure_demandee_'+num+'_'+i)) {
 					if(document.getElementById('mesure_demandee_'+num+'_'+i).checked==true) {
 						temoin_check='y';

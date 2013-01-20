@@ -384,7 +384,7 @@ if (isset($titre_page)) {
 
 
 	$tbs_aff_temoin_check_serveur="n";
-	if(getSettingAOui('aff_temoin_check_serveur')) {
+	if((getSettingAOui('aff_temoin_check_serveur'))&&($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable')) {
 		// insert into setting set name='aff_temoin_check_serveur', value='y';
 		$tbs_aff_temoin_check_serveur="y";
 	}
@@ -439,7 +439,12 @@ if (isset($titre_page)) {
 			$tab_tmp_info_classes=get_noms_classes_from_ele_login($_SESSION['login']);
 			$tbs_statut[]=array("classe"=>"" , "texte"=>"Élève de ".$tab_tmp_info_classes[count($tab_tmp_info_classes)-1]);
 		}elseif ($_SESSION['statut'] == "responsable") {
-			$tab_tmp_ele=get_enfants_from_resp_login($_SESSION['login']);
+			if(getSettingAOui('GepiMemesDroitsRespNonLegaux')) {
+				$tab_tmp_ele=get_enfants_from_resp_login($_SESSION['login'], "simple", "yy");
+			}
+			else {
+				$tab_tmp_ele=get_enfants_from_resp_login($_SESSION['login']);
+			}
 			$chaine_enfants="";
 			if(count($tab_tmp_ele)>0) {
 				$nom_enfant=$tab_tmp_ele[1];
@@ -685,4 +690,3 @@ if(isset($_SESSION['statut'])) {
 //debug_var();
 
 ?>
-

@@ -2,7 +2,7 @@
 /*
 *
 *
-* Copyright 2001, 2011 Thomas Belliard, Laurent Delineau, Edouard Hue, Eric Lebrun, Stéphane Boireau, Christian Chapel
+* Copyright 2001, 2013 Thomas Belliard, Laurent Delineau, Edouard Hue, Eric Lebrun, Stéphane Boireau, Christian Chapel
 *
 * This file is part of GEPI.
 *
@@ -44,6 +44,11 @@ if (mysql_num_rows($res_test)==0) {
 }
 if (!checkAccess()) {
 	header("Location: ../logout.php?auto=1");
+	die();
+}
+
+if(($_SESSION['statut']=='autre')&&(!acces("/cahier_notes/visu_releve_notes_bis.php", $_SESSION['statut']))) {
+	header("Location: ../accueil.php?msg=Acces_non_autorise");
 	die();
 }
 
@@ -222,8 +227,31 @@ if ((!isset($tab_id_classe))&&(!isset($id_groupe))) {
 	echo "<p class='bold'>";
 	if($_SESSION['statut']=='professeur') {
 		echo "<a href='index.php'>Retour</a>";
+		if(getSettingAOui('GepiProfImprRelSettings')) {
+			echo " | ";
+			echo "<a href='param_releve_html.php' target='_blank'>Paramètres du relevé HTML</a>";
+		}
 	}
-	elseif(($_SESSION['statut']=='scolarite')||($_SESSION['statut']=='administrateur')) {
+	elseif($_SESSION['statut']=='scolarite') {
+		echo "<a href='../accueil.php'>Retour à l'accueil</a>";
+		if(getSettingAOui('GepiScolImprRelSettings')) {
+			echo " | ";
+			echo "<a href='param_releve_html.php' target='_blank'>Paramètres du relevé HTML</a>";
+		}
+		echo " | ";
+		echo "<a href='visu_releve_notes.php'>Ancien dispositif</a>";
+	}
+	elseif($_SESSION['statut']=='cpe') {
+		echo "<a href='../accueil.php'>Retour à l'accueil</a>";
+		if(getSettingAOui('GepiCpeImprRelSettings')) {
+			echo " | ";
+			echo "<a href='param_releve_html.php' target='_blank'>Paramètres du relevé HTML</a>";
+		}
+		echo " | ";
+		echo "<a href='visu_releve_notes.php'>Ancien dispositif</a>";
+	}
+	elseif($_SESSION['statut']=='administrateur') {
+		// Normalement, l'administrateur n'a pas accès aux relevés de notes...
 		echo "<a href='../accueil.php'>Retour à l'accueil</a>";
 		echo " | ";
 		echo "<a href='param_releve_html.php' target='_blank'>Paramètres du relevé HTML</a>";
@@ -322,13 +350,28 @@ if ((!isset($tab_id_classe))&&(!isset($id_groupe))) {
 		$sql="SELECT DISTINCT c.* FROM j_eleves_classes jec, classes c WHERE (c.id=jec.id_classe AND jec.login='".$_SESSION['login']."') ORDER BY c.classe;";
 	}
 	elseif(($_SESSION['statut']=='responsable')&&(getSettingValue("GepiAccesReleveParent") == "yes")) {
-		$sql="SELECT DISTINCT c.*  FROM eleves e, j_eleves_classes jec, classes c, responsables2 r, resp_pers rp
+		$sql="(SELECT DISTINCT c.* FROM eleves e, j_eleves_classes jec, classes c, responsables2 r, resp_pers rp
 				WHERE (e.ele_id=r.ele_id AND
 						r.pers_id=rp.pers_id AND
 						rp.login='".$_SESSION['login']."' AND
 						(r.resp_legal='1' OR r.resp_legal='2') AND
 						c.id=jec.id_classe AND
-						jec.login=e.login);";
+						jec.login=e.login))";
+		if(getSettingAOui('GepiMemesDroitsRespNonLegaux')) {
+			$sql.=" UNION (SELECT DISTINCT c.* FROM eleves e, j_eleves_classes jec, classes c, responsables2 r, resp_pers rp
+				WHERE (e.ele_id=r.ele_id AND
+						r.pers_id=rp.pers_id AND
+						rp.login='".$_SESSION['login']."' AND
+						r.resp_legal='0' AND
+						r.acces_sp='y' AND 
+						c.id=jec.id_classe AND
+						jec.login=e.login))";
+		}
+		$sql.=";";
+
+	}
+	elseif($_SESSION['statut']=='autre') {
+		$sql="SELECT DISTINCT c.* FROM classes c ORDER BY classe";
 	}
 	else {
 		echo "<p>Vous n'êtes pas autorisé à accéder aux relevés de notes des élèves.</p>\n";
@@ -639,6 +682,8 @@ elseif(!isset($choix_periode)) {
 		echo "<th>Choix</th>\n";
 		for($j=1;$j<=$max_per;$j++) {
 			if(!in_array($j,$tab_periode_exclue)) {
+				// Problème: Si on clique sur la case, elle change deux fois d'état
+				//echo "<td style='background-color:lightgreen;' onclick=\"alterne_coche('tab_periode_num_$j')\">";
 				echo "<td style='background-color:lightgreen;'>";
 				//echo "<label for='choix_periode' style='cursor: pointer;'><input type=\"radio\" name=\"periode\" value='$j' /></label>\n";
 				echo "<span style='cursor: pointer;'>
@@ -691,7 +736,18 @@ elseif(!isset($choix_periode)) {
 ?>
 <script type="text/javascript">
 	//<![CDATA[
-	getElementById('formulaire').setAttribute( "autocomplete", "off" );
+	document.getElementById('formulaire').setAttribute( "autocomplete", "off" );
+
+	function alterne_coche(id) {
+		if(document.getElementById(id)) {
+			if(document.getElementById(id).checked==true) {
+				document.getElementById(id).checked=false;
+			}
+			else {
+				document.getElementById(id).checked=true;
+			}
+		}
+	}
 	////]]>
 </script>
 	
@@ -1009,7 +1065,7 @@ if(($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable')) {
     echo "document.getElementById('div_param_releve').style.display='none';";
 } else {
     echo "document.getElementById('div_param_releve').style.display='';";
-};
+}
 
 echo "	////]]>";
 echo "</script>\n";
@@ -1113,14 +1169,33 @@ echo "</script>\n";
 			// On fait le filtrage des élèves plus bas dans le cas du prof
 		}
 		elseif(($_SESSION['statut'] == 'professeur')&&(getSettingValue("GepiAccesReleveProfP")=="yes")) {
-			$sql="SELECT 1=1 FROM j_eleves_professeurs WHERE professeur='".$_SESSION['login']."' AND id_classe='".$tab_id_classe[$i]."' LIMIT 1;";
-			$test_acces=mysql_query($sql);
-			if(mysql_num_rows($test_acces)>0) {
-				$sql="SELECT DISTINCT e.* FROM eleves e,
-								j_eleves_classes jec
-					WHERE jec.login=e.login AND
+			if(is_pp($_SESSION['login'], $tab_id_classe[$i])) {
+				if(getSettingAOui('GepiAccesPPTousElevesDeLaClasse')) {
+					// Le prof est PP de la classe, on lui donne l'accès à tous les élèves de la classe
+					$sql="SELECT DISTINCT e.* FROM eleves e,
+									j_eleves_classes jec
+						WHERE jec.login=e.login AND
+									jec.id_classe='".$tab_id_classe[$i]."'
+						ORDER BY e.nom,e.prenom;";
+				}
+				else {
+					// Le prof est PP d'au moins une partie des élèves de la classe
+					$sql="SELECT DISTINCT e.* FROM eleves e,
+									j_eleves_classes jec,
+									j_eleves_professeurs jep
+						WHERE jec.login=e.login AND
+								jec.login=jep.login AND
+								jep.professeur='".$_SESSION['login']."' AND
 								jec.id_classe='".$tab_id_classe[$i]."'
-					ORDER BY e.nom,e.prenom;";
+						ORDER BY e.nom,e.prenom;";
+					$test_acces=mysql_query($sql);
+					if(mysql_num_rows($test_acces)==0) {
+						// On pourrait mettre un tentative_intrusion()
+						echo "<p>Vous n'êtes pas ".getSettingValue("gepi_prof_suivi")." de cette classe, donc pas autorisé à accéder aux relevés de notes de ces élèves.</p>\n";
+						require("../lib/footer.inc.php");
+						die();
+					}
+				}
 			}
 			else {
 				// On pourrait mettre un tentative_intrusion()
@@ -1133,13 +1208,36 @@ echo "</script>\n";
 			$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_classes jec WHERE (jec.id_classe='".$tab_id_classe[$i]."' AND jec.login='".$_SESSION['login']."' AND jec.login=e.login);";
 		}
 		elseif(($_SESSION['statut']=='responsable')&&(getSettingValue("GepiAccesReleveParent") == "yes")) {
-			$sql="SELECT DISTINCT e.*  FROM eleves e, j_eleves_classes jec, responsables2 r, resp_pers rp
+			$sql="(SELECT DISTINCT e.*  FROM eleves e, j_eleves_classes jec, responsables2 r, resp_pers rp
 					WHERE (e.ele_id=r.ele_id AND
 							r.pers_id=rp.pers_id AND
 							rp.login='".$_SESSION['login']."' AND
 							jec.id_classe='".$tab_id_classe[$i]."' AND
 							(r.resp_legal='1' OR r.resp_legal='2') AND
-							jec.login=e.login);";
+							jec.login=e.login))";
+			if(getSettingAOui('GepiMemesDroitsRespNonLegaux')) {
+				$sql.=" UNION (SELECT DISTINCT e.*  FROM eleves e, j_eleves_classes jec, responsables2 r, resp_pers rp
+					WHERE (e.ele_id=r.ele_id AND
+							r.pers_id=rp.pers_id AND
+							rp.login='".$_SESSION['login']."' AND
+							jec.id_classe='".$tab_id_classe[$i]."' AND
+							r.resp_legal='0' AND
+							r.acces_sp='y' AND 
+							jec.login=e.login))";
+			}
+			$sql.=";";
+		}
+		elseif($_SESSION['statut'] == 'autre') {
+			$sql="SELECT DISTINCT e.* FROM eleves e,
+							j_eleves_classes jec
+				WHERE jec.login=e.login AND
+							jec.id_classe='".$tab_id_classe[$i]."'
+				ORDER BY e.nom,e.prenom;";
+		}
+		else {
+			echo "<p style='color:red'>La recherche de la liste des élèves n'est pas possible pour vos statut et autorisations???</p>\n";
+			require("../lib/footer.inc.php");
+			die();
 		}
 		//echo "$sql<br />";
 
@@ -1613,7 +1711,7 @@ else {
 			}
 			//==============================
 
-			if($mode_bulletin!="pdf") {
+			if(($mode_bulletin!="pdf")&&($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable')) {
 				echo "<div class='noprint' style='background-color:white; border: 1px solid red;'>\n";
 				echo "<h2>Classe de ".$classe."</h2>\n";
 				if($periode_num=="intervalle") {
@@ -1634,7 +1732,7 @@ else {
 			}
 			else {
 
-				if($mode_bulletin!="pdf") {
+				if(($mode_bulletin!="pdf")&&($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable')) {
 					//+++++++++++++++++++++++++++++++++++
 					// A FAIRE: Il faudrait afficher l'effectif des élèves choisis faisant partie de la classe/période...
 					echo "<p>".count($tab_releve[$id_classe][$periode_num]['eleve'])." élève(s) sélectionné(s) dans cette classe (<em>pour cette période</em>).</p>\n";
@@ -1685,10 +1783,14 @@ else {
 										releve_html($tab_releve[$id_classe][$periode_num],$rg[$i],-1);
 
 										$chaine_info_deux_releves="";
-										if(($un_seul_bull_par_famille=="non")&&($nb_releves>1)) {$chaine_info_deux_releves=".<br /><span style='color:red'>Plusieurs relevés pour une même famille&nbsp: les adresses des deux responsables diffèrent.</span><br /><span style='color:red'>Si vous ne souhaitez pas de deuxième relevé, pensez à cocher la case 'Un seul relevé par famille'.</span>";}
+										if(($un_seul_bull_par_famille=="non")&&($nb_releves>1)&&($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable')) {
+											$chaine_info_deux_releves=".<br /><span style='color:red'>Plusieurs relevés pour une même famille&nbsp: les adresses des deux responsables diffèrent.</span><br /><span style='color:red'>Si vous ne souhaitez pas de deuxième relevé, pensez à cocher la case 'Un seul relevé par famille'.</span>";
+										}
 
-										echo "<div class='espacement_bulletins'><div align='center'>Espacement (<em>non imprimé</em>) entre les relevés".$chaine_info_deux_releves."</div></div>\n";
-	
+										if(($_SESSION['statut']!='eleve')&&($_SESSION['statut']!='responsable')) {
+											echo "<div class='espacement_bulletins'><div align='center'>Espacement (<em>non imprimé</em>) entre les relevés".$chaine_info_deux_releves."</div></div>\n";
+										}
+
 										flush();
 									}
 									else {

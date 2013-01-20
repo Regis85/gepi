@@ -333,6 +333,11 @@ if (isset($_POST['is_posted'])) {
 			}
 		}
 
+		if (isset($_POST['informer_scolarite_modif_mail'])) {
+			if (!saveSetting("informer_scolarite_modif_mail", $_POST['informer_scolarite_modif_mail'])) {
+				$msg .= "Erreur lors de l'enregistrement du paramètre informer_scolarite_modif_mail !";
+			}
+		}
 
 		if (isset($_POST['ele_tel_pers'])) {
 			if (!saveSetting("ele_tel_pers", $_POST['ele_tel_pers'])) {
@@ -367,7 +372,6 @@ if (isset($_POST['is_posted'])) {
 			}
 		}
 
-
 		if (isset($_POST['type_bulletin_par_defaut'])) {
 			if(($_POST['type_bulletin_par_defaut']=='html')||($_POST['type_bulletin_par_defaut']=='pdf')) {
 				if (!saveSetting("type_bulletin_par_defaut", $_POST['type_bulletin_par_defaut'])) {
@@ -398,6 +402,12 @@ if (isset($_POST['is_posted'])) {
 		else{
 			if (!saveSetting("aff_temoin_check_serveur", 'n')) {
 				$msg .= "Erreur lors de l'enregistrement du paramètre aff_temoin_check_serveur !";
+			}
+		}
+
+		if (isset($_POST['url_racine_gepi'])) {
+			if (!saveSetting("url_racine_gepi", $_POST['url_racine_gepi'])) {
+				$msg .= "Erreur lors de l'enregistrement du paramètre url_racine_gepi !";
 			}
 		}
 
@@ -1181,7 +1191,7 @@ echo add_token_field();
 			</label>
 		</span>
 	</p>
-	
+
 	<p class="ligneCaps">
 		<span class="cellTab70">
 			<a name='mode_email_ele'></a>
@@ -1209,7 +1219,25 @@ echo add_token_field();
 			</label>
 		</span>
 	</p>
-	
+
+	<p class="ligneCaps">
+		<span class="cellTab70">
+			<a name='informer_scolarite_modif_mail'></a>
+			Dans le cas où vous choisissez ci-dessus Mise à jour du mail depuis Gérer mon compte, envoyer un mail à <?php
+			if(getSettingValue('gepiSchoolEmail')!='') {
+				echo getSettingValue('gepiSchoolEmail');
+			}
+			else {
+				echo "(<em>gepiSchoolEmail non renseigné</em>)";
+			}
+		?> pour signaler le changement de mail de façon à permettre de reporter la saisie dans Sconet.
+		</span>
+		<span class="cellTab plusPetit">
+		<input type="radio" name="informer_scolarite_modif_mail" id="informer_scolarite_modif_mail_y" value="y" <?php if((getSettingValue("informer_scolarite_modif_mail")=="y")||(getSettingValue("informer_scolarite_modif_mail")=="")) {echo 'checked';} ?> onchange='changement()' /> <label for='informer_scolarite_modif_mail_y' style='cursor: pointer;'>Oui</label><br />
+		<input type="radio" name="informer_scolarite_modif_mail" id="informer_scolarite_modif_mail_n" value="n" <?php if(getSettingValue("informer_scolarite_modif_mail")=="n"){echo 'checked';} ?> onchange='changement()' /> <label for='informer_scolarite_modif_mail_n' style='cursor: pointer;'>Non</label><br />
+		</span>
+	</p>
+
 	<p class="ligneCaps">
 		<span class="cellTab70">
 			Type de bulletins par défaut&nbsp;:
@@ -1569,11 +1597,28 @@ if($exp_imp_chgt_etab=="") {$exp_imp_chgt_etab="no";}
 
 	<p class="ligneCaps">
 		<span class="cellTab70">
+			<label for='url_racine_gepi' style='cursor: pointer'>Adresse de la racine Gepi</label>
+			<br />
+			<span class='small'>
+				(<em>utilisé dans des envois de mails pour donner l'adresse d'une page en particulier<br />
+				Exemple&nbsp;: https://NOM_SERVEUR/DOSSIER_GEPI</em>)&nbsp;:</label>
+			</span>
+		</span>
+		<span class="cellTab plusPetit">
+			<?php
+				echo "<input type='text' name='url_racine_gepi' id='url_racine_gepi' value=\"".getSettingValue('url_racine_gepi')."\" onchange='changement()' size='30' />\n";
+			?>
+		</span>
+	</p>
+
+	<p class="ligneCaps">
+		<span class="cellTab70">
 			N° d'enregistrement à la CNIL : <br />
 			<span class='small'>
 				Conformément à l'article 16 de la loi 78-17 du 6 janvier 1978, dite loi informatique et liberté, cette 
 				installation de GEPI doit faire l'objet d'une déclaration de traitement automatisé d'informations nominatives 
-				de la CNIL. Si ce n'est pas encore le cas, laissez libre le champ ci-contre
+				de la CNIL. Si ce n'est pas encore le cas, laissez libre le champ ci-contre<br />
+				<a href='http://www.sylogix.org/projects/gepi/wiki/Declaration_cnil' target='_blank'>Voir wiki</a>
 			</span>
 		</span>
 		<span class="cellTab plusPetit">
