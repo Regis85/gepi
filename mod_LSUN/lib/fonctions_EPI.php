@@ -150,7 +150,7 @@ function getEPICommun() {
 	getEPIparClasse();
 	$sqlGetEpi = "SELECT lec.* FROM lsun_epi_communs AS lec "
 		. "ORDER BY periode , codeEPI , id ";
-	//echo $sqlGetEpi;
+	//echo $sqlGetEpi."<br /><br />";
 	$resultchargeDB = $mysqli->query($sqlGetEpi);
 	return $resultchargeDB;
 }
@@ -184,7 +184,7 @@ function getEPIparClasse($classe = NULL) {
 function getMatieresEPICommun($idEPI) {
 	global $mysqli;
 	$sqlGetMatieresEpi = "SELECT id_matiere, modalite FROM lsun_j_epi_matieres WHERE id_epi = '$idEPI' ORDER BY id_matiere;";
-	//echo $sqlGetMatieresEpi;
+	//echo $sqlGetMatieresEpi."<br />";
 	$resultchargeDB = $mysqli->query($sqlGetMatieresEpi);
 	return $resultchargeDB;
 }
@@ -276,13 +276,24 @@ function lieEpiCours($id_epi , $id_enseignement , $aid, $id=NULL) {
 
 function getLiaisonEpiEnseignementByIdEpi($id) {
 	global $mysqli;
-	$sqlGetLiaisonEpiEnseignement = "SELECT * FROM lsun_j_epi_enseignements WHERE id_epi = '$id' ";
-	//echo $sqlGetLiaisonEpiEnseignement;
+	//$sqlGetLiaisonEpiEnseignement = "SELECT * FROM lsun_j_epi_enseignements WHERE id_epi = '$id' ";
+	// lsun_j_epi_enseignements.aid c'est indice_aid? Non. Cf mod_LSUN/lib/requetes_tables.php
+	// La liaison ci-dessous posera pb si on fait par la suite des EPI en utilisant la table 'groupes'
+	$sqlGetLiaisonEpiEnseignement = "SELECT ljee.* FROM lsun_j_epi_enseignements ljee, aid_config ac WHERE ljee.id_epi = '$id' AND ljee.id_enseignements=ac.indice_aid AND ac.type_aid='2';";
+	//echo $sqlGetLiaisonEpiEnseignement."<br />";
+	/*
+	$sqlGetLiaisonEpiEnseignement = "SELECT ljee.* FROM lsun_j_epi_enseignements ljee, 
+										aid a, 
+										aid_config ac 
+									WHERE ljee.id_epi = '$id' AND 
+										ljee.id_enseignements=a.id AND 
+										a.indice_aid=ac.indice_aid AND 
+										ac.type_aid='2';";
+	echo $sqlGetLiaisonEpiEnseignement."<br />";
+	*/
 	$resultchargeDB = $mysqli->query($sqlGetLiaisonEpiEnseignement);
 	return $resultchargeDB;
 }
-
-
 
 function delLienEPI($idEPI) {
 	global $mysqli;
@@ -357,9 +368,19 @@ function delClasseEPI($EpiId) {
 
 function getAID($id) {
 	global $mysqli;
+	global $msg_erreur;
+
+	// Type 2 c'est pour les EPI seulement (cf lib/global.inc.php)
 	$sqlGetAid = "SELECT * FROM aid_config WHERE indice_aid = '$id' AND type_aid = '2' ";
 	//echo $sqlGetAid;
-	$retour = $mysqli->query($sqlGetAid)->fetch_object();
+	$res = $mysqli->query($sqlGetAid);
+	if ($res->num_rows) {
+		$retour = $res->fetch_object();
+	}
+	else {
+		$msg_erreur.="<span style='color:red'>L'AID n°$id n'existe pas ou n'est pas de type EPI.</span><br />";
+		$retour=false;
+	}
 	return $retour;
 }
 

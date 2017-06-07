@@ -94,6 +94,12 @@ if ($creeFichier == 'y') {
 		$_SESSION["forceNotes"]="n";
 	}
 
+	if(filter_input(INPUT_POST, 'BilanFinCycleUnSeulEnseignementComplement')) {
+		saveSetting('LSU_BilanFinCycleUnSeulEnseignementComplement', filter_input(INPUT_POST, 'BilanFinCycleUnSeulEnseignementComplement'));
+	}	else {
+		saveSetting('LSU_BilanFinCycleUnSeulEnseignementComplement',  "n");
+	}
+
 	if(filter_input(INPUT_POST, 'forceAppreciations')) {
 		$_SESSION["forceAppreciations"]="y";
 	}	else {
@@ -110,8 +116,10 @@ if ($creeFichier == 'y') {
 
 }
 
-
-
+//==============================================================
+// Pour tenir compte d'un ajout de champ 'annee' oublié en 1.7.1
+check_tables_modifiees();
+//==============================================================
 
 //===== On récupère les données =====
 $scolarites = getUtilisateurSurStatut('scolarite');
@@ -154,6 +162,8 @@ if($anomalies_tables!="") {
 if(isset($msg_requetesAdmin)) {
 	echo "<div align='center'>".$msg_requetesAdmin."</div>";
 }
+
+$msg_erreur="";
 ?>
 
 <h2>Procédure</h2>
@@ -205,7 +215,7 @@ if(isset($msg_requetesAdmin)) {
 		<?php
 			$test_champ=mysqli_num_rows(mysqli_query($mysqli, "SELECT * FROM nomenclature_modalites_election;"));
 			if ($test_champ==0) {
-				echo "<span style='color:red;'><strong>ANOMALIE&nbsp;:</strong> Les modalités d'élection des matières sont manquantes.<br /><a href='../utilitaires/maj.php'>Forcer une mise à jour de la base</a> pour re-créer les modalités manquantes.</span><br />";
+				echo "<span style='color:red;'><strong>ANOMALIE&nbsp;:</strong> Les modalités d'élection des matières sont manquantes.<br /><a href='../utilitaires/maj.php'>Forcer une mise à jour de la base</a> pour re-créer les modalités manquantes.</span><br /><br />";
 			}
 		?>
 
@@ -293,6 +303,179 @@ if(isset($msg_requetesAdmin)) {
 					if(mysqli_num_rows($test)>0) {
 						while($lig=mysqli_fetch_object($test)) {
 							echo "<br /><span style='color:red'>Attention&nbsp;:</span> ".get_nom_prenom_eleve($lig->login)." a ".$lig->nb_prof." ".$gepi_prof_suivi."<br />C'est une anomalie. Vous ne devriez en avoir qu'un par élève/classe.<br />Effectuez un <a href='../utilitaires/clean_tables.php?maj=2".add_token_in_url()."' target='_blank'>Nettoyage des tables</a> pour n'en retenir qu'un par élève/classe ou revalidez la sélection affichée dans <a href='../classes/classes_const.php?id_classe=".$selectionClasse[$loop]."' target='_blank'>Gérer les élèves de la classe de ".get_nom_classe($selectionClasse[$loop])."</a> pour ne garder que le professeur affiché dans le champ SELECT.<br />Dans le cas contraire, <span style='color:red'>un seul des $gepi_prof_suivi sera arbitrairement retenu dans l'export</span>.<br />";
+						}
+					}
+				}
+			}
+
+			//$sql="SELECT login,numind,cast(SUBSTRING(numind,2,10) AS UNSIGNED) as ma_valeur from utilisateurs where statut='professeur';";
+			//$sql="SELECT login,numind,CAST(SUBSTRING(numind,2,255) AS UNSIGNED) AS ma_valeur FROM utilisateurs u,j_groupes_professeurs jgp WHERE u.statut='professeur' AND jgp.login=u.login GROUP BY ma_valeur HAVING COUNT(ma_valeur)>1;";
+			//$sql="SELECT u.login,u.numind,CAST(SUBSTRING(numind,2,255) AS UNSIGNED) AS ma_valeur FROM utilisateurs u,j_groupes_professeurs jgp WHERE u.statut='professeur' AND jgp.login=u.login GROUP BY ma_valeur HAVING COUNT(ma_valeur)>1;";
+			$sql="SELECT u.login,u.numind,CAST(SUBSTRING(numind,2,255) AS UNSIGNED) AS ma_valeur FROM utilisateurs u WHERE u.statut='professeur' AND u.login IN (SELECT DISTINCT login FROM j_groupes_professeurs) GROUP BY ma_valeur HAVING COUNT(ma_valeur)>1;";
+			//echo "$sql<br />";
+			$test_numind=mysqli_query($mysqli,$sql);
+			if(mysqli_num_rows($test_numind)>0) {
+				echo "<br /><span style='color:red'>Un ou des identifiants professeurs sont en doublons.<br />La valeur numérique suivant le P doit être unique.<br />";
+				echo "</span>";
+				while($lig_numind=mysqli_fetch_object($test_numind)) {
+
+					$sql="SELECT DISTINCT u.login,u.numind,u.nom,u.prenom FROM utilisateurs u, j_groupes_professeurs jgp WHERE u.statut='professeur' AND CAST(SUBSTRING(numind,2,255) AS UNSIGNED)='".$lig_numind->ma_valeur."' AND u.login=jgp.login ORDER BY u.nom, u.prenom;";
+					//echo "$sql<br />";
+					$test_numind2=mysqli_query($mysqli,$sql);
+					if(mysqli_num_rows($test_numind2)>0) {
+						echo "<table class='boireaus boireaus_alt'>
+						<tr>
+							<th>Login</th>
+							<th>Nom</th>
+							<th>Prénom</th>
+							<th>Numind</th>
+						</tr>";
+						while($lig_numind2=mysqli_fetch_object($test_numind2)) {
+							echo "
+						<tr>
+							<td><a href='../utilisateurs/modify_user.php?user_login=".$lig_numind2->login."' target='_blank'>".$lig_numind2->login."</a></td>
+							<td>".$lig_numind2->nom."</td>
+							<td>".$lig_numind2->prenom."</td>
+							<td>".$lig_numind2->numind."</td>
+						</tr>";
+						}
+						echo "</table>
+						<p style='color:red'>Vous devez faire en sorte d'avoir des identifiants STS différents pour la partie numérique.</p>";
+					}
+				}
+			}
+
+
+			$sql="SELECT DISTINCT m.* FROM mef m, eleves e, j_eleves_classes jec WHERE e.mef_code=m.mef_code AND jec.login=e.login AND m.mef_rattachement='' ORDER BY libelle_long, libelle_edition;";
+			$test=mysqli_query($mysqli, $sql);
+			if(mysqli_num_rows($test)>0) {
+				echo "<br /><span style='color:red'>Un ou des MEF n'ont pas de <strong>mef_rattachement</strong>.<br />Les MEF des élèves correspondants ne vont pas être identifiés.<br /><a href='../mef/admin_mef.php' target='_blank'>Corriger</a> par exemple en important un <strong>Nomenclature.xml</strong> de Sconet.<br />Liste des MEF concernés&nbsp;: ";
+				$cpt_mef=0;
+				while($lig=mysqli_fetch_object($test)) {
+					if($cpt_mef>0) {
+						echo ", ";
+					}
+					echo $lig->libelle_edition;
+					$cpt_mef++;
+				}
+				echo ".</span><br />";
+			}
+
+
+			if((getSettingAOui("LSU_Donnees_BilanFinCycle"))&&(isset($selectionClasse))&&(count($selectionClasse)>0)) {
+
+				$gepiYear=getSettingValue("gepiYear");
+				$gepiYear_debut=mb_substr($gepiYear, 0, 4);
+				if(!preg_match("/^20[0-9]{2}/", $gepiYear_debut)) {
+					echo "<span style='color:red'>Année scolaire non définie dans Gestion générale/Configuration générale.</span><br />";
+				}
+				else {
+
+					$tab_domaine_socle=array();
+					$tab_domaine_socle["CPD_FRA"]="Comprendre, s'exprimer en utilisant la langue française à l'oral et à l'écrit";
+					$tab_domaine_socle["CPD_ETR"]="Comprendre, s'exprimer en utilisant une langue étrangère et, le cas échéant, une langue régionale";
+					$tab_domaine_socle["CPD_SCI"]="Comprendre, s'exprimer en utilisant les langages mathématiques, scientifiques et informatiques";
+					$tab_domaine_socle["CPD_ART"]="Comprendre, s'exprimer en utilisant les langages des arts et du corps";
+					$tab_domaine_socle["MET_APP"]="Les méthodes et outils pour apprendre";
+					$tab_domaine_socle["FRM_CIT"]="La formation de la personne et du citoyen";
+					$tab_domaine_socle["SYS_NAT"]="Les systèmes naturels et les systèmes techniques";
+					$tab_domaine_socle["REP_MND"]="Les représentations du monde et l'activité humaine";
+
+					for($loop=0;$loop<count($selectionClasse);$loop++) {
+						$tab_ele_saisie_incomplete=array();
+						//$sql="SELECT e.* FROM eleves e, j_eleves_classes jec WHERE jec.login=e.login AND jec.id_classe='".$id_classe."' AND jec.periode='$periode' ORDER BY e.nom, e.prenom;";
+						$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_classes jec WHERE jec.login=e.login AND jec.id_classe='".$selectionClasse[$loop]."' ORDER BY e.nom, e.prenom;";
+						//echo "$sql<br />";
+						$res=mysqli_query($GLOBALS["mysqli"], $sql);
+						if(mysqli_num_rows($res)>0) {
+							while($lig=mysqli_fetch_assoc($res)) {
+								$mef_code_ele=$lig['mef_code'];
+								if(!isset($tab_cycle[$mef_code_ele])) {
+									$tmp_tab_cycle_niveau=calcule_cycle_et_niveau($mef_code_ele, "", "");
+									$cycle=$tmp_tab_cycle_niveau["mef_cycle"];
+									$niveau=$tmp_tab_cycle_niveau["mef_niveau"];
+									$tab_cycle[$mef_code_ele]=$cycle;
+								}
+
+								if((!isset($tab_cycle[$mef_code_ele]))||($tab_cycle[$mef_code_ele]=="")) {
+									echo "
+							<span style='color:red'>Le cycle courant pour <a href='../eleves/visu_eleve.php?ele_login=".$lig['login']."' target='_blank'>".$lig['nom']." ".$lig['prenom']."</a> n'a pas pu être identifié&nbsp;???<br />";
+								}
+								else {
+									if($lig['no_gep']=="") {
+										echo "<span style='color:red; margin-bottom:1em;'>Le numéro national INE de l'élève <a href='../eleves/visu_eleve.php?ele_login=".$lig["login"]."' target='_blank'>".$lig['nom']." ".$lig['prenom']."</a> est vide.<br />La saisie du niveau de maitrise sur les composantes du socle n'est pas possible pour cet élève.<br />";
+									}
+									else {
+
+										foreach($tab_domaine_socle as $code => $libelle) {
+											//$sql="SELECT 1=1 FROM socle_eleves_composantes WHERE ine='".$lig['no_gep']."' AND cycle='".$tab_cycle[$mef_code_ele]."' AND code_composante='".$code."' AND periode='$periode' AND annee='".$gepiYear_debut."';";
+											$sql="SELECT 1=1 FROM socle_eleves_composantes WHERE ine='".$lig['no_gep']."' AND cycle='".$tab_cycle[$mef_code_ele]."' AND code_composante='".$code."' AND annee='".$gepiYear_debut."';";
+											//echo "$sql<br />";
+											$test=mysqli_query($GLOBALS["mysqli"], $sql);
+											if(mysqli_num_rows($test)==0) {
+												if(!array_key_exists($lig['login'], $tab_ele_saisie_incomplete)) {
+													$tab_ele_saisie_incomplete[$lig['login']]=$lig;
+												}
+												$tab_ele_saisie_incomplete[$lig['login']]["code_composante"][$code]="vide";
+											}
+										}
+
+										$sql="SELECT 1=1 FROM socle_eleves_syntheses WHERE ine='".$lig['no_gep']."' AND cycle='".$tab_cycle[$mef_code_ele]."' AND synthese!='' AND annee='".$gepiYear_debut."';";
+										//echo "$sql<br />";
+										$test=mysqli_query($GLOBALS["mysqli"], $sql);
+										if(mysqli_num_rows($test)==0) {
+											if(!array_key_exists($lig['login'], $tab_ele_saisie_incomplete)) {
+												$tab_ele_saisie_incomplete[$lig['login']]=$lig;
+											}
+											$tab_ele_saisie_incomplete[$lig['login']]["synthese_vide"]="y";
+										}
+									}
+								}
+							}
+
+							//echo "<pre>";
+							//print_r($tab_ele_saisie_incomplete);
+							//echo "</pre>";
+
+							if(count($tab_ele_saisie_incomplete)>0) {
+								$current_classe=get_nom_classe($selectionClasse[$loop]);
+								echo "
+						<p style='color:red; margin-top:1em;'>Les saisies de composantes du socle sont <strong>incomplètes</strong> pour le ou les élèves suivants de ".$current_classe."&nbsp;:</p>
+						<table class='boireaus boireaus_alt'>
+							<thead>
+								<tr>
+									<th rowspan='2'>Élève</th>
+									<th rowspan='2'>Classe</th>
+									<th colspan='".count($tab_domaine_socle)."'>Composantes</th>
+									<th rowspan='2'>Synthèse</th>
+								</tr>
+								<tr>";
+								foreach($tab_domaine_socle as $code => $libelle) {
+									echo "
+									<th title=\"$libelle\">".$code."</th>";
+								}
+								echo "
+								</tr>
+							</thead>
+							<tbody>";
+								foreach($tab_ele_saisie_incomplete as $login_ele => $current_tab) {
+									echo "
+								<tr onmouseover=\"this.style.backgroundColor='white';\" onmouseout=\"this.style.backgroundColor='';\">
+									<td>".$current_tab["nom"]." ".$current_tab["prenom"]."</td>
+									<td>".$current_classe."</td>";
+								foreach($tab_domaine_socle as $code => $libelle) {
+									echo "
+									<td title=\"$libelle\">".(isset($current_tab["code_composante"][$code]) ? "<img src='../images/disabled.png' class='icone16' alt='Vide' />" : "<img src='../images/enabled.png' class='icone16' alt='Ok' />")."</td>";
+								}
+								echo "
+									<td>".(isset($current_tab["synthese_vide"]) ? "<img src='../images/disabled.png' class='icone16' alt='Vide' />" : "<img src='../images/enabled.png' class='icone16' alt='Ok' />")."</td>
+								</tr>";
+								}
+								echo "
+							</tbody>
+						</table>
+						<p style='color:red;'>L'enregistrement du bilan de fin de cycle de ces élèves sera refusé dans LSU.</p>";
+							}
 						}
 					}
 				}
@@ -576,10 +759,16 @@ while ($APCommun = $AidParcours->fetch_object()) { ?>
 		while ($matiereEPI = $listeMatieresEPI->fetch_object()) {
 			$tableauMatieresEPI[] = array('matiere'=>$matiereEPI->id_matiere, 'modalite'=>$matiereEPI->modalite);
 		}
+		/*
+		echo "EPI ".$epiCommun->id."<pre>";
+		print_r($tableauMatieresEPI);
+		echo "</pre>";
+		*/
 ?>
 			<div class="lsun_cadre fieldset_opacite50">
 				<div style='float:left; width:50em; font-weight:bold; font-size:x-large; text-align:left; margin-left:1em;'><?php echo $epiCommun->intituleEpi;?></div>
 				<div align='center'>
+					<a name='ancre_EPI_<?php echo $epiCommun->id; ?>'></a>
 					<input type="hidden" 
 						   name="modifieEpiId[<?php echo $epiCommun->id; ?>]" 
 						   value="<?php echo $epiCommun->id; ?>" />
@@ -604,14 +793,19 @@ while ($APCommun = $AidParcours->fetch_object()) { ?>
 								</select>
 							</td>
 							<td>
-								<input type="text" size="40" name="modifieEpiIntitule[<?php echo $epiCommun->id; ?>]" value="<?php echo $epiCommun->intituleEpi; ?>" />
+								<input type="text" size="40" name="modifieEpiIntitule[<?php echo $epiCommun->id; ?>]" value="<?php echo $epiCommun->intituleEpi; ?>" /><?php
+								if($epiCommun->intituleEpi=="") {
+									echo "
+								<img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' title=\"L'intitulé ne doit pas être vide.\" style='vertical-align:top;' />";
+								}
+								?>
 							</td>
 							<td>
 								<textarea rows="6" cols="50" name="modifieEpiDescription[<?php echo $epiCommun->id; ?>]" /><?php echo $epiCommun->descriptionEpi; ?></textarea><?php
 								if($epiCommun->descriptionEpi=="") {
 									echo "
-								<img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' title=\"La description ne doit pas être vide.\" style='vertical-align:top;' />";
-				}
+								<img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' title=\"La description ne doit pas être vide.\" style='vertical-align:top;' />";
+								}
 
 								?>
 							</td>
@@ -657,7 +851,7 @@ while ($APCommun = $AidParcours->fetch_object()) { ?>
 <?php
 		if($cpt_classe_associees==0) {
 			echo "
-								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' />Aucune classe n'est associée.</span><br />";
+								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' />Aucune classe n'est associée.</span><br />";
 		}
 ?>
 								<img src='../images/icons/add.png' class='icone16' alt='Ajouter' />
@@ -714,7 +908,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 <?php
 		if(($epiCommun->periode=="")||($epiCommun->periode=="0")) {
 			echo "
-								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' />Période de fin non définie.</span><br />";
+								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' />Période de fin non définie.</span><br />";
 		}
 ?>
 							</td>
@@ -732,7 +926,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 							</th>
 
 							<td style='vertical-align:top; border:0px;' title=\"Associer des disciplines\">
-								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' />Aucune discipline n'est encore associée.</span><br />
+								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' />Aucune discipline n'est encore associée.</span><br />
 								Associer des disciplines&nbsp;:<br />
 								<select multiple 
 										size='6' 
@@ -803,7 +997,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 				elseif ($matEPI['modalite'] =="R") {echo " enseignement religieux";}
 				echo "</span>)</label>";
 				if(getMatiereOnMatiere($matEPI['matiere'])->code_matiere=="") {
-					echo "<img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' title=\"La nomenclature de la matière ".$matEPI['matiere']." n'est pas renseignée.\nL'export ne sera pas valide sans que les nomenclatures soient corrigées.\" />";
+					echo "<img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' title=\"La nomenclature de la matière ".$matEPI['matiere']." n'est pas renseignée.\nL'export ne sera pas valide sans que les nomenclatures soient corrigées.\" />";
 				}
 				echo "<br />";
 				echo "
@@ -811,6 +1005,10 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 
 				// Ajouter des matières
 				if($cpt_row==0) {
+					$message_nb_matieres_EPI="";
+					if(count($tableauMatieresEPI)<=1) {
+						$message_nb_matieres_EPI="<span style='color:red'>Un EPI nécessite au moins 2 matières associées.</span><br />";
+					}
 
 					$tab_matieres_non_associees=array();
 					$listeMatieres->data_seek(0);
@@ -822,7 +1020,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 
 					if(count($tab_matieres_non_associees)==0) {
 						echo "
-						<td style='color:red'>Aucune matière ne reste à associer</td>";
+						<td style='color:red'>".$message_nb_matieres_EPI."Aucune matière ne reste à associer</td>";
 					}
 					else {
 
@@ -833,7 +1031,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 									rowspan='".count($tableauMatieresEPI)."' 
 									onmouseover=\"document.getElementById('span_ajout_modifieEpiMatiere_".$epiCommun->id."').style.display=''\" 
 									onmouseout=\"affiche_masque_select_EPI_AP_Parcours('modifieEpiMatiere', ".$epiCommun->id.")\">
-
+									".$message_nb_matieres_EPI."
 									<img src='../images/icons/add.png' class='icone16' alt='Ajouter' />
 									Associer d'autres disciplines<br />
 									<span id='span_ajout_modifieEpiMatiere_".$epiCommun->id."'>
@@ -888,6 +1086,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 
 <?php
 		$listeLiaisons = getLiaisonEpiEnseignementByIdEpi($epiCommun->id); 
+		//echo "\$listeLiaisons=getLiaisonEpiEnseignementByIdEpi($epiCommun->id)<br />mysqli_num_rows(\$listeLiaisons)=".mysqli_num_rows($listeLiaisons)."<br />";
 ?>
 					<table class='table_no_border'>
 <?php
@@ -897,7 +1096,7 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 						<tr>
 							<th>Liaisons&nbsp;:</th>
 							<td>
-								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' />Aucune liaison AID n'est encore effectuée.</span><br />
+								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' />Aucune liaison AID n'est encore effectuée.</span><br />
 								Associer des AID aux EPI<br />
 								<select multiple 
 										size='6' 
@@ -909,8 +1108,16 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 							$listeAids = getEpiAid(); 
 							while ($aid = $listeAids->fetch_object()) {
 								if(!estCoursEpi($epiCommun->id ,"aid-".$aid->id_enseignement)) {
+									$style_erreurs_aid="";
+									$sql="SELECT * FROM aid WHERE indice_aid='".$aid->id_enseignement."' AND nom='';";
+									$test=mysqli_query($mysqli, $sql);
+									if(mysqli_num_rows($test)>0) {
+										$style_erreurs_aid=" style='color:red' title=\"Un ou des AID de la catégorie ont un nom vide. Il faudra corriger cela.\"";
+									}
 									echo "
-									<option value=\"aid-".$aid->id_enseignement."\">aid-".$aid->description."</option>";
+									<option value=\"aid-".$aid->id_enseignement."\"".$style_erreurs_aid.">aid-".$aid->description;
+									//echo " (".$aid->id_enseignement.")";
+									echo "</option>";
 								}
 							}
 
@@ -936,12 +1143,22 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 						echo "
 						<tr>";
 					}
+
+					$chaine_erreurs_aid="";
+					$sql="SELECT * FROM aid WHERE indice_aid='".$liaison->id_enseignements."' AND nom='';";
+					$test=mysqli_query($mysqli, $sql);
+					if(mysqli_num_rows($test)>0) {
+						while($lig_test=mysqli_fetch_object($test)) {
+							$chaine_erreurs_aid.="<br /><span style='color:red'>L'AID n°".$lig_test->id." a un nom vide. Il faut <a href='../aid/modif_fiches.php?aid_id=".$lig_test->id."&indice_aid=".$liaison->id_enseignements."&action=modif&retour=index2.php' target='_blank'>corriger</a>.</span>";
+						}
+					}
+
 					echo "
 							<td>
 								<input type='checkbox' name='modifieEpiLiaison".$epiCommun->id."[]' id='modifieEpiLiaison".$epiCommun->id."_".$cpt_row."' value=\"aid-".$liaison->id_enseignements."\" checked />
 							</td>
 							<td>
-								<label for='modifieEpiLiaison".$epiCommun->id."_".$cpt_row."'>AID - ".getAID($liaison->id_enseignements)->nom."</label>
+								<label for='modifieEpiLiaison".$epiCommun->id."_".$cpt_row."'>AID - ".getAID($liaison->id_enseignements)->nom."</label>".$chaine_erreurs_aid."
 							</td>";
 
 					if($cpt_row==0) {
@@ -978,8 +1195,15 @@ $tab_span_champs_select[]='span_ajout_modifieEpiClasse_'.$epiCommun->id;
 							$listeAids = getEpiAid(); 
 							while ($aid = $listeAids->fetch_object()) {
 								if(!estCoursEpi($epiCommun->id ,"aid-".$aid->id_enseignement)) {
+									$style_erreurs_aid="";
+									$sql="SELECT * FROM aid WHERE indice_aid='".$aid->id_enseignement."' AND nom='';";
+									$test=mysqli_query($mysqli, $sql);
+									if(mysqli_num_rows($test)>0) {
+										$style_erreurs_aid=" style='color:red' title=\"Un ou des AID de la catégorie ont un nom vide. Il faudra corriger cela.\"";
+									}
+
 									echo "
-										<option value=\"aid-".$aid->id_enseignement."\">aid-".$aid->description."</option>";
+										<option value=\"aid-".$aid->id_enseignement."\"".$style_erreurs_aid.">aid-".$aid->description."</option>";
 								}
 							}
 
@@ -1144,7 +1368,7 @@ while ($classe = $classes->fetch_object()) { ?>
 	$res_liaison=getAidConfig($ap->id_aid);
 	if(mysqli_num_rows($res_liaison)==0) {
 		echo "
-								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' />Aucune liaison AID n'est encore effectuée.</span><br />Sélectionnez un AID et Enregistrez la modification&nbsp;:<br />";
+								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' />Aucune liaison AID n'est encore effectuée.</span><br />Sélectionnez un AID et Enregistrez la modification&nbsp;:<br />";
 	}
 ?>
 								<select name="liaisonApAid[<?php echo $ap->id; ?>]">
@@ -1200,7 +1424,7 @@ while ($classe = $classes->fetch_object()) { ?>
 							</th>
 
 							<td style='vertical-align:top; border:0px;' title=\"Associer des disciplines\">
-								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone16' alt='Attention' />Aucune discipline n'est encore associée.</span><br />
+								<span style='color:red'><img src='../images/icons/ico_attention.png' class='icone32' alt='Attention' />Aucune discipline n'est encore associée.</span><br />
 								Associer des disciplines&nbsp;:<br />
 								<select multiple 
 										size='6' 
@@ -1629,6 +1853,10 @@ while ($liaison = $listeAidAp->fetch_object()) { ?>
 		</p>
 	</fieldset>
 </form>
+
+<?php
+echo $msg_erreur;
+?>
 
 </div>
 

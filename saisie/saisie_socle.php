@@ -80,6 +80,19 @@ $id_groupe=isset($_POST['id_groupe']) ? $_POST['id_groupe'] : (isset($_GET['id_g
 $id_classe=isset($_POST['id_classe']) ? $_POST['id_classe'] : (isset($_GET['id_classe']) ? $_GET['id_classe'] : NULL);
 $periode=isset($_POST['periode']) ? $_POST['periode'] : (isset($_GET['periode']) ? $_GET['periode'] : NULL);
 
+$cycle_particulier=isset($_POST['cycle_particulier']) ? $_POST['cycle_particulier'] : (isset($_GET['cycle_particulier']) ? $_GET['cycle_particulier'] : NULL);
+$checked_cycle_particulier["courant_eleve"]="";
+$checked_cycle_particulier[2]="";
+$checked_cycle_particulier[3]="";
+$checked_cycle_particulier[4]="";
+if((isset($cycle_particulier))&&($cycle_particulier=="")) {
+	unset($cycle_particulier);
+	$checked_cycle_particulier["courant_eleve"]=" checked";
+}
+else {
+	$checked_cycle_particulier[$cycle_particulier]=" checked";
+}
+
 if(isset($id_classe)) {
 	unset($id_groupe);
 }
@@ -151,6 +164,16 @@ $tab_traduction_niveau_couleur[4]="<span style='color:blue' title=\"\">TBM</span
 //20170302
 $tab_types_enseignements_complement=get_tab_types_enseignements_complement();
 
+// 20170521: Ménage:
+//===========================================
+$sql="DELETE FROM socle_eleves_composantes WHERE ine='';";
+$del=mysqli_query($mysqli, $sql);
+$sql="DELETE FROM socle_eleves_enseignements_complements WHERE ine='';";
+$del=mysqli_query($mysqli, $sql);
+$sql="DELETE FROM socle_eleves_syntheses WHERE ine='';";
+$del=mysqli_query($mysqli, $sql);
+//===========================================
+
 //debug_var();
 
 if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
@@ -203,7 +226,7 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 			}
 			else {
 				$tab_ine_du_groupe=array();
-				$sql="SELECT DISTINCT no_gep FROM eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND periode='".$periode."' AND id_groupe='".$id_groupe."';";
+				$sql="SELECT DISTINCT no_gep FROM eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND periode='".$periode."' AND id_groupe='".$id_groupe."' AND e.no_gep!='';";
 				//echo "$sql<br />";
 				$res=mysqli_query($GLOBALS["mysqli"], $sql);
 				while($lig=mysqli_fetch_object($res)) {
@@ -212,7 +235,18 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 
 				foreach($niveau_maitrise as $current_element => $valeur) {
 					if(($valeur!="")&&($valeur!="1")&&($valeur!="2")&&($valeur!="3")&&($valeur!="4")) {
-						$msg.=get_nom_prenom_from_INE($ine)."&nbsp;: Valeur invalide pour '$current_element'&nbsp;: '$valeur'.<br />";
+						// 20170521
+						$tmp_tab=explode("|", $current_element);
+						$ine=$tmp_tab[0];
+						$cycle=$tmp_tab[1];
+						$code=$tmp_tab[2];
+
+						if($ine=="") {
+							$msg.="Un identifiant INE est vide. Il ne peut pas être pris en compte.<br />";
+						}
+						else {
+							$msg.=get_nom_prenom_from_INE($ine)."&nbsp;: Valeur invalide pour '$current_element'&nbsp;: '$valeur'.<br />";
+						}
 					}
 					else {
 						//$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code
@@ -221,8 +255,10 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 						$cycle=$tmp_tab[1];
 						$code=$tmp_tab[2];
 
-
-						if(!in_array($ine, $tab_ine_du_groupe)) {
+						if($ine=="") {
+							$msg.="Un identifiant INE est vide. Il ne peut pas être pris en compte.<br />";
+						}
+						elseif(!in_array($ine, $tab_ine_du_groupe)) {
 							$msg.="L'élève $ine <em>(".get_nom_prenom_from_INE($ine).")</em> n'est pas membre de la classe.<br />";
 						}
 						else {
@@ -305,42 +341,48 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 				$enseignement_complement=isset($_POST["enseignement_complement"]) ? $_POST["enseignement_complement"] : NULL;
 				if(isset($enseignement_complement)) {
 					foreach($enseignement_complement as $ine => $positionnement) {
-						$sql="SELECT * FROM socle_eleves_enseignements_complements WHERE ine='".$ine."' AND id_groupe='".$id_groupe."';";
-						//echo "$sql<br />";
-						$test=mysqli_query($GLOBALS["mysqli"], $sql);
-						if(mysqli_num_rows($test)==0) {
-							$sql="INSERT INTO socle_eleves_enseignements_complements SET ine='".$ine."', 
-										id_groupe='".$id_groupe."', 
-										positionnement='".$positionnement."', 
-										login_saisie='".$_SESSION['login']."', 
-										date_saisie='".strftime("%Y-%m-%d %H:%M:%S")."';";
-							//echo "$sql<br />";
-							$insert=mysqli_query($GLOBALS["mysqli"], $sql);
-							if($insert) {
-								$cpt_reg++;
-							}
-							else {
-								$msg.="Erreur lors de l'enregistrement $sql<br />";
-								$nb_err++;
-							}
+						// 20170521 : 
+						if($ine=="") {
+							$msg.="Enseignement de complément&nbsp;: Un identifiant INE est vide pour un élève. Il ne peut pas être pris en compte.<br />";
 						}
 						else {
-							$lig=mysqli_fetch_object($test);
-
-							if($positionnement!=$lig->positionnement) {
-								$sql="UPDATE socle_eleves_enseignements_complements SET 
-												positionnement='".$positionnement."', 
-												login_saisie='".$_SESSION['login']."', 
-												date_saisie='".strftime("%Y-%m-%d %H:%M:%S")."' 
-											WHERE ine='".$ine."' AND id_groupe='".$id_groupe."';";
+							$sql="SELECT * FROM socle_eleves_enseignements_complements WHERE ine='".$ine."' AND id_groupe='".$id_groupe."';";
+							//echo "$sql<br />";
+							$test=mysqli_query($GLOBALS["mysqli"], $sql);
+							if(mysqli_num_rows($test)==0) {
+								$sql="INSERT INTO socle_eleves_enseignements_complements SET ine='".$ine."', 
+											id_groupe='".$id_groupe."', 
+											positionnement='".$positionnement."', 
+											login_saisie='".$_SESSION['login']."', 
+											date_saisie='".strftime("%Y-%m-%d %H:%M:%S")."';";
 								//echo "$sql<br />";
-								$update=mysqli_query($GLOBALS["mysqli"], $sql);
-								if($update) {
+								$insert=mysqli_query($GLOBALS["mysqli"], $sql);
+								if($insert) {
 									$cpt_reg++;
 								}
 								else {
-									$msg.="Erreur lors de la mise à jour $sql<br />";
+									$msg.="Erreur lors de l'enregistrement $sql<br />";
 									$nb_err++;
+								}
+							}
+							else {
+								$lig=mysqli_fetch_object($test);
+
+								if($positionnement!=$lig->positionnement) {
+									$sql="UPDATE socle_eleves_enseignements_complements SET 
+													positionnement='".$positionnement."', 
+													login_saisie='".$_SESSION['login']."', 
+													date_saisie='".strftime("%Y-%m-%d %H:%M:%S")."' 
+												WHERE ine='".$ine."' AND id_groupe='".$id_groupe."';";
+									//echo "$sql<br />";
+									$update=mysqli_query($GLOBALS["mysqli"], $sql);
+									if($update) {
+										$cpt_reg++;
+									}
+									else {
+										$msg.="Erreur lors de la mise à jour $sql<br />";
+										$nb_err++;
+									}
 								}
 							}
 						}
@@ -354,7 +396,10 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 						$ine=$tmp_tab[0];
 						$cycle=$tmp_tab[1];
 
-						if(!in_array($ine, $tab_ine_du_groupe)) {
+						if($ine=="") {
+							$msg.="Un identifiant INE est vide. Il ne peut pas être pris en compte pour la synthèse.<br />";
+						}
+						elseif(!in_array($ine, $tab_ine_du_groupe)) {
 							$msg.="L'élève $ine <em>(".get_nom_prenom_from_INE($ine).")</em> n'est pas membre de l'enseignement.<br />";
 						}
 						else {
@@ -474,7 +519,18 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 
 				foreach($niveau_maitrise as $current_element => $valeur) {
 					if(($valeur!="")&&($valeur!="1")&&($valeur!="2")&&($valeur!="3")&&($valeur!="4")) {
-						$msg.=get_nom_prenom_from_INE($ine)."&nbsp;: Valeur invalide pour '$current_element'&nbsp;: '$valeur'.<br />";
+						// 20170521
+						$tmp_tab=explode("|", $current_element);
+						$ine=$tmp_tab[0];
+						$cycle=$tmp_tab[1];
+						$code=$tmp_tab[2];
+
+						if($ine=="") {
+							$msg.="Un identifiant INE est vide. Il ne peut pas être pris en compte.<br />";
+						}
+						else {
+							$msg.=get_nom_prenom_from_INE($ine)."&nbsp;: Valeur invalide pour '$current_element'&nbsp;: '$valeur'.<br />";
+						}
 					}
 					else {
 						//$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code
@@ -483,8 +539,11 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 						$cycle=$tmp_tab[1];
 						$code=$tmp_tab[2];
 
-
-						if(!in_array($ine, $tab_ine_du_groupe)) {
+						// 20170521
+						if($ine=="") {
+							$msg.="Un identifiant INE est vide. Il ne peut pas être pris en compte pour la composante $code.<br />";
+						}
+						elseif(!in_array($ine, $tab_ine_du_groupe)) {
 							$msg.="L'élève $ine <em>(".get_nom_prenom_from_INE($ine).")</em> n'est pas membre de la classe.<br />";
 						}
 						else {
@@ -572,7 +631,10 @@ if((isset($_POST['enregistrer_saisies']))&&(isset($periode))) {
 						$ine=$tmp_tab[0];
 						$cycle=$tmp_tab[1];
 
-						if(!in_array($ine, $tab_ine_du_groupe)) {
+						if($ine=="") {
+							$msg.="Un identifiant INE est vide. Il ne peut pas être pris en compte pour la synthèse.<br />";
+						}
+						elseif(!in_array($ine, $tab_ine_du_groupe)) {
 							$msg.="L'élève $ine <em>(".get_nom_prenom_from_INE($ine).")</em> n'est pas membre de la classe.<br />";
 						}
 						else {
@@ -789,6 +851,7 @@ if($_SESSION['statut']=="professeur") {
 				die();
 			}
 			$lig_max=mysqli_fetch_object($res_max);
+			$max_per=$lig_max->max_per;
 
 			echo "<p style='margin-left:3em;text-indent:-3em;'>Choisissez la période&nbsp;:<br />";
 			for($i=1;$i<$max_per+1;$i++) {
@@ -810,6 +873,7 @@ if($_SESSION['statut']=="professeur") {
 				die();
 			}
 			$lig_max=mysqli_fetch_object($res_max);
+			$max_per=$lig_max->max_per;
 
 			echo "<p style='margin-left:3em;text-indent:-3em;'>Choisissez la période&nbsp;:<br />";
 			for($i=1;$i<$max_per+1;$i++) {
@@ -903,6 +967,7 @@ else {
 			die();
 		}
 		$lig_max=mysqli_fetch_object($res_max);
+		$max_per=$lig_max->max_per;
 
 		echo "<p style='margin-left:3em;text-indent:-3em;'>Choisissez la période&nbsp;:<br />";
 		for($i=1;$i<$max_per+1;$i++) {
@@ -951,8 +1016,42 @@ if($SocleOuvertureSaisieComposantes) {
 	}
 }
 
+// Saisie pour un cycle particulier, pas forcément le cycle actuel de l'élève.
+echo "<form action='".$_SERVER['PHP_SELF']."' method='post' style='float:right; width:20em;' style='display:none;' id='form_choix_cycle'>
+	<fieldset class='fieldset_opacite50'>
+		".add_token_field()."
+		<input type='hidden' name='forcer_cycle' value='y' />
+		".((isset($id_groupe)) ? "<input type='hidden' name='id_groupe' value='$id_groupe' />" : ((isset($id_classe)) ? "<input type='hidden' name='id_classe' value='$id_classe' />" : ""))."
+		<input type='hidden' name='periode' value='$periode' />
+		<p>Effectuer les saisies pour un cycle particulier, autre que le cycle actuel de l'élève&nbsp;:<br />
+			<input type='radio' name='cycle_particulier' id='cycle_VIDE' value=''".$checked_cycle_particulier["courant_eleve"]." onchange=\"checkbox_change('cycle_VIDE');checkbox_change('cycle_2');checkbox_change('cycle_3');checkbox_change('cycle_4');\" /><label for='cycle_VIDE' id='texte_cycle_VIDE'>Cycle courant de l'élève</label><br />
+			<input type='radio' name='cycle_particulier' id='cycle_2' value='2'".$checked_cycle_particulier[2]." onchange=\"checkbox_change('cycle_VIDE');checkbox_change('cycle_2');checkbox_change('cycle_3');checkbox_change('cycle_4');\" /><label for='cycle_2' id='texte_cycle_2'>Cycle 2</label><br />
+			<input type='radio' name='cycle_particulier' id='cycle_3' value='3'".$checked_cycle_particulier[3]." onchange=\"checkbox_change('cycle_VIDE');checkbox_change('cycle_2');checkbox_change('cycle_3');checkbox_change('cycle_4');\" /><label for='cycle_3' id='texte_cycle_3'>Cycle 3</label><br />
+			<input type='radio' name='cycle_particulier' id='cycle_4' value='4'".$checked_cycle_particulier[4]." onchange=\"checkbox_change('cycle_VIDE');checkbox_change('cycle_2');checkbox_change('cycle_3');checkbox_change('cycle_4');\" /><label for='cycle_4' id='texte_cycle_4'>Cycle 4</label>
+		</p>
+		<p><input type='submit' value='Choisir' /></p>
+	</fieldset>
+</form>
+<!--
+<div style='clear:both;'></div>
+-->";
+
 if(isset($id_groupe)) {
 	echo "\n<h2>".get_info_grp($id_groupe)." (période $periode)</h2>";
+
+	if(isset($cycle_particulier)) {
+		echo "<p style='color:red; font-weight:bold; margin-bottom:1em;'>Saisie pour le cycle $cycle_particulier sans tenir compte du cycle actuel lié au MEF de l'élève.</p>";
+	}
+
+	$sql="SELECT MAX(periode) AS max_per FROM j_eleves_groupes WHERE id_groupe='$id_groupe';";
+	$res_max=mysqli_query($mysqli, $sql);
+	if(mysqli_num_rows($res_max)==0) {
+		echo "<p style='color:red'><strong>ANOMALIE&nbsp;:</strong> Aucun élève n'a été trouvé dans le groupe/enseignement.</p>";
+		require("../lib/footer.inc.php");
+		die();
+	}
+	$lig_max=mysqli_fetch_object($res_max);
+	$max_per=$lig_max->max_per;
 
 	//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	// A REVOIR POUR RECUPERER LES SAISIES D ANNEES PRECEDENTES
@@ -961,7 +1060,7 @@ if(isset($id_groupe)) {
 	// Récupérer les saisies antérieures
 	$tab_civ_nom_prenom=array();
 	$tab_saisies=array();
-	$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND sec.periode=jeg.periode AND sec.ine=e.no_gep AND jeg.id_groupe='".$id_groupe."' AND annee='".$gepiYear_debut."';";
+	$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND sec.periode=jeg.periode AND sec.ine=e.no_gep AND jeg.id_groupe='".$id_groupe."' AND annee='".$gepiYear_debut."' AND e.no_gep!='';";
 	$res=mysqli_query($GLOBALS["mysqli"], $sql);
 	if(mysqli_num_rows($res)>0) {
 		while($lig=mysqli_fetch_object($res)) {
@@ -974,7 +1073,7 @@ if(isset($id_groupe)) {
 	}
 
 	$tab_syntheses=array();
-	$sql="SELECT DISTINCT ses.* FROM socle_eleves_syntheses ses, eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND ses.ine=e.no_gep AND jeg.id_groupe='".$id_groupe."' AND annee='".$gepiYear_debut."';";
+	$sql="SELECT DISTINCT ses.* FROM socle_eleves_syntheses ses, eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND ses.ine=e.no_gep AND jeg.id_groupe='".$id_groupe."' AND annee='".$gepiYear_debut."' AND e.no_gep!='';";
 	$res=mysqli_query($GLOBALS["mysqli"], $sql);
 	if(mysqli_num_rows($res)>0) {
 		while($lig=mysqli_fetch_object($res)) {
@@ -986,12 +1085,27 @@ if(isset($id_groupe)) {
 		}
 	}
 
+	// INE vide:
+	$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND jeg.id_groupe='".$id_groupe."' AND jeg.periode='".$periode."' AND e.no_gep='' ORDER BY e.nom, e.prenom;";
+	$res=mysqli_query($GLOBALS["mysqli"], $sql);
+	if(mysqli_num_rows($res)>0) {
+		echo "<p style='color:red; margin-bottom:1em;'>Un ou des élèves ont un numéro national (INE) vide&nbsp;: ";
+		$cpt_ine_vide=0;
+		while($lig=mysqli_fetch_object($res)) {
+			if($cpt_ine_vide>0) {
+				echo ", ";
+			}
+			echo "<a href='../eleves/visu_eleve.php?ele_login=".$lig->login."' target='_blank'>".$lig->nom." ".$lig->prenom."</a>";
+			$cpt_ine_vide++;
+		}
+		echo "<br />La saisie n'est pas possible pour ces élèves.<br />Demandez à l'administrateur de faire une mise à jour des informations élèves d'après Sconet.</p>";
+	}
 
 	// Récupérer la liste des élèves et leur cycle.
-	$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND jeg.id_groupe='".$id_groupe."' AND jeg.periode='".$periode."' ORDER BY e.nom, e.prenom;";
+	$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_groupes jeg WHERE e.login=jeg.login AND jeg.id_groupe='".$id_groupe."' AND jeg.periode='".$periode."' AND e.no_gep!='' ORDER BY e.nom, e.prenom;";
 	$res=mysqli_query($GLOBALS["mysqli"], $sql);
 	if(mysqli_num_rows($res)==0) {
-		echo "<p style='color:red;'>Aucun élève n'a été trouvé pour ce groupe.</p>";
+		echo "<p style='color:red;'>Aucun élève avec INE non vide n'a été trouvé pour ce groupe.</p>";
 	}
 	else {
 		//20170302
@@ -1021,7 +1135,7 @@ if(isset($id_groupe)) {
 
 			// A VOIR : Si on fait un TRUNCATE au lieu d'un DELETE sur les groupes au changement d'année, on risque de ré-attribuer des id_groupe correspondant à des valeurs de socle_eleves_enseignements_complements
 			$sql="SELECT * FROM socle_eleves_enseignements_complements 
-							WHERE id_groupe='".$id_groupe."';";
+							WHERE id_groupe='".$id_groupe."' AND ine!='';";
 			$res_ec=mysqli_query($mysqli, $sql);
 			if(mysqli_num_rows($res_ec)>0) {
 				while($lig_ec=mysqli_fetch_assoc($res_ec)) {
@@ -1102,6 +1216,13 @@ if(isset($id_groupe)) {
 		<p style='color:red'>Le cycle courant pour ".$lig->nom." ".$lig->prenom." n'a pas pu être identitfié&nbsp;???</p>";
 			}
 			else {
+				if(isset($cycle_particulier)) {
+					$cycle=$cycle_particulier;
+				}
+				else {
+					$cycle=$tab_cycle[$mef_code_ele];
+				}
+
 				echo "
 		<p style='margin-top:2em;'><strong>".$lig->nom." ".$lig->prenom."</strong> <em>(".get_liste_classes_eleve($lig->login).")</em> cycle ".$tab_cycle[$mef_code_ele]."&nbsp;:</p>
 		<table class='boireaus boireaus_alt'>
@@ -1161,35 +1282,35 @@ if(isset($id_groupe)) {
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_0'".$title[0].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_0' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value=''".$checked[0]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_1'".$title[1].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_1' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='1'".$checked[1]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_2'".$title[2].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_2' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='2'".$checked[2]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_3'".$title[3].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_3' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='3'".$checked[3]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_4'".$title[4].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_4' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='4'".$checked[4]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>".((($periode>1)&&($SocleOuvertureSaisieComposantes)) ? "
@@ -1215,8 +1336,8 @@ if(isset($id_groupe)) {
 			</tbody>
 		</table>";
 
-				// 20170302
-				if(($tab_cycle[$mef_code_ele]==4)&&($periode==3)) {
+				// 20170302 :
+				if(($tab_cycle[$mef_code_ele]==4)&&($periode==$max_per)) {
 					if($enseignement_complement) {
 						//$tab_types_enseignements_complement
 						$checked[0]=" checked";
@@ -1250,20 +1371,20 @@ if(isset($id_groupe)) {
 
 				if($SocleSaisieSyntheses) {
 					echo "
-		<p".((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"])) ? $tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"] : "").">
+		<p".((isset($tab_syntheses[$lig->no_gep][$cycle]["title"])) ? $tab_syntheses[$lig->no_gep][$cycle]["title"] : "").">
 			<strong>Synthèse&nbsp;:</strong> 
-			<input type='hidden' name='indice_synthese[]' value=\"".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."\" />
+			<input type='hidden' name='indice_synthese[]' value=\"".$lig->no_gep."|".$cycle."\" />
 			<textarea style='vertical-align:top;' 
 					cols='80' 
 					rows='4' 
-					name=\"no_anti_inject_synthese_".$lig->no_gep."_".$tab_cycle[$mef_code_ele]."\">".
-					((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"])) ? $tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"] : "").
+					name=\"no_anti_inject_synthese_".$lig->no_gep."_".$cycle."\">".
+					((isset($tab_syntheses[$lig->no_gep][$cycle]["synthese"])) ? $tab_syntheses[$lig->no_gep][$cycle]["synthese"] : "").
 			"</textarea>
 		</p>";
 				}
 				else {
 					echo "
-		<p".((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"])) ? $tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"] : "")."><strong>Synthèse&nbsp;:</strong> ".((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"])) ? nl2br($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"]) : "<span style='color:red'>Vide</span>")."</p>";
+		<p".((isset($tab_syntheses[$lig->no_gep][$cycle]["title"])) ? $tab_syntheses[$lig->no_gep][$cycle]["title"] : "")."><strong>Synthèse&nbsp;:</strong> ".((isset($tab_syntheses[$lig->no_gep][$cycle]["synthese"])) ? nl2br($tab_syntheses[$lig->no_gep][$cycle]["synthese"]) : "<span style='color:red'>Vide</span>")."</p>";
 				}
 
 				$cpt_ele++;
@@ -1271,6 +1392,11 @@ if(isset($id_groupe)) {
 		}
 
 		if($SocleOuvertureSaisieComposantes=="y") {
+			if(isset($cycle_particulier)) {
+				echo "
+		<input type='hidden' name='cycle_particulier' value='".$cycle_particulier."' />";
+			}
+
 			echo "
 		<input type='hidden' name='enregistrer_saisies' value='y' />
 		<input type='hidden' name='id_groupe' value='$id_groupe' />
@@ -1327,6 +1453,12 @@ if(isset($id_groupe)) {
 					maj_couleurs_maitrise(i, j);
 				}
 			}
+
+			checkbox_change('cycle_VIDE');
+			checkbox_change('cycle_2');
+			checkbox_change('cycle_3');
+			checkbox_change('cycle_4');
+			document.getElementById('form_choix_cycle').style.display='';
 		</script>";
 		}
 		echo "
@@ -1337,13 +1469,27 @@ if(isset($id_groupe)) {
 elseif(isset($id_classe)) {
 	echo "<h3>Classe de ".get_nom_classe($id_classe)." (période $periode)</h3>";
 
+	if(isset($cycle_particulier)) {
+		echo "<p style='color:red; font-weight:bold; margin-bottom:1em;'>Saisie pour le cycle $cycle_particulier sans tenir compte du cycle actuel lié au MEF de l'élève.</p>";
+	}
+
+	$sql="SELECT MAX(num_periode) AS max_per FROM periodes WHERE id_classe='$id_classe';";
+	$res_max=mysqli_query($mysqli, $sql);
+	if(mysqli_num_rows($res_max)==0) {
+		echo "<p style='color:red'><strong>ANOMALIE&nbsp;:</strong> La classe n'a pas de périodes définies.</p>";
+		require("../lib/footer.inc.php");
+		die();
+	}
+	$lig_max=mysqli_fetch_object($res_max);
+	$max_per=$lig_max->max_per;
+
 	//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 	// A REVOIR POUR RECUPERER LES SAISIES D ANNEES PRECEDENTES
 	//+++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 	// Récupérer les saisies antérieures
 	$tab_saisies=array();
-	$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e, j_eleves_classes jec WHERE e.login=jec.login AND sec.ine=e.no_gep AND sec.periode=jec.periode AND jec.id_classe='".$id_classe."' AND annee='".$gepiYear_debut."';";
+	$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e, j_eleves_classes jec WHERE e.login=jec.login AND sec.ine=e.no_gep AND sec.periode=jec.periode AND jec.id_classe='".$id_classe."' AND annee='".$gepiYear_debut."' AND e.no_gep!='';";
 	//echo "$sql<br />";
 	$res=mysqli_query($GLOBALS["mysqli"], $sql);
 	if(mysqli_num_rows($res)>0) {
@@ -1357,7 +1503,7 @@ elseif(isset($id_classe)) {
 	}
 
 	$tab_syntheses=array();
-	$sql="SELECT DISTINCT ses.* FROM socle_eleves_syntheses ses, eleves e, j_eleves_classes jec WHERE e.login=jec.login AND ses.ine=e.no_gep AND jec.id_classe='".$id_classe."' AND annee='".$gepiYear_debut."';";
+	$sql="SELECT DISTINCT ses.* FROM socle_eleves_syntheses ses, eleves e, j_eleves_classes jec WHERE e.login=jec.login AND ses.ine=e.no_gep AND jec.id_classe='".$id_classe."' AND annee='".$gepiYear_debut."' AND e.no_gep!='';";
 	$res=mysqli_query($GLOBALS["mysqli"], $sql);
 	if(mysqli_num_rows($res)>0) {
 		while($lig=mysqli_fetch_object($res)) {
@@ -1370,11 +1516,28 @@ elseif(isset($id_classe)) {
 		}
 	}
 
+
+	// INE vide:
+	$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_classes jec WHERE e.login=jec.login AND jec.id_classe='".$id_classe."' AND jec.periode='".$periode."' AND e.no_gep='' ORDER BY e.nom, e.prenom;";
+	$res=mysqli_query($GLOBALS["mysqli"], $sql);
+	if(mysqli_num_rows($res)>0) {
+		echo "<p style='color:red; margin-bottom:1em;'>Un ou des élèves ont un numéro national (INE) vide&nbsp;: ";
+		$cpt_ine_vide=0;
+		while($lig=mysqli_fetch_object($res)) {
+			if($cpt_ine_vide>0) {
+				echo ", ";
+			}
+			echo "<a href='../eleves/visu_eleve.php?ele_login=".$lig->login."' target='_blank'>".$lig->nom." ".$lig->prenom."</a>";
+			$cpt_ine_vide++;
+		}
+		echo "<br />La saisie n'est pas possible pour ces élèves.<br />Demandez à l'administrateur de faire une mise à jour des informations élèves d'après Sconet.</p>";
+	}
+
 	// Récupérer la liste des élèves et leur cycle.
-	$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_classes jec WHERE e.login=jec.login AND jec.id_classe='".$id_classe."' AND jec.periode='".$periode."' ORDER BY e.nom, e.prenom;";
+	$sql="SELECT DISTINCT e.* FROM eleves e, j_eleves_classes jec WHERE e.login=jec.login AND jec.id_classe='".$id_classe."' AND jec.periode='".$periode."' AND e.no_gep!='' ORDER BY e.nom, e.prenom;";
 	$res=mysqli_query($GLOBALS["mysqli"], $sql);
 	if(mysqli_num_rows($res)==0) {
-		echo "<p style='color:red;'>Aucun élève n'a été trouvé pour cette classe.</p>";
+		echo "<p style='color:red;'>Aucun élève avec INE non vide n'a été trouvé pour cette classe.</p>";
 	}
 	else {
 
@@ -1447,6 +1610,13 @@ elseif(isset($id_classe)) {
 		<p style='color:red'>Le cycle courant pour ".$lig->nom." ".$lig->prenom." n'a pas pu être identitfié&nbsp;???</p>";
 			}
 			else {
+				if(isset($cycle_particulier)) {
+					$cycle=$cycle_particulier;
+				}
+				else {
+					$cycle=$tab_cycle[$mef_code_ele];
+				}
+
 				echo "
 		<p style='margin-top:2em;'><strong>".$lig->nom." ".$lig->prenom."</strong> <em>(".get_liste_classes_eleve($lig->login).")</em> cycle ".$tab_cycle[$mef_code_ele]."&nbsp;:</p>
 		<table class='boireaus boireaus_alt'>
@@ -1497,35 +1667,35 @@ elseif(isset($id_classe)) {
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_0'".$title[0].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_0' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value=''".$checked[0]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_1'".$title[1].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_1' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='1'".$checked[1]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_2'".$title[2].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_2' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='2'".$checked[2]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_3'".$title[3].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_3' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='3'".$checked[3]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>
 					<td id='td_niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_4'".$title[4].">
 						<input type='radio' 
 							id='niveau_maitrise_".$cpt_ele."_".$cpt_domaine."_4' 
-							name=\"niveau_maitrise[".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."|".$code."]\" 
+							name=\"niveau_maitrise[".$lig->no_gep."|".$cycle."|".$code."]\" 
 							value='4'".$checked[4]." 
 							onchange=\"changement(); maj_couleurs_maitrise($cpt_ele,$cpt_domaine);\" />"."
 					</td>".((($periode>1)&&($SocleOuvertureSaisieComposantes)) ? "
@@ -1553,20 +1723,20 @@ elseif(isset($id_classe)) {
 
 				if($SocleSaisieSyntheses) {
 					echo "
-		<p".((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"])) ? $tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"] : "").">
+		<p".((isset($tab_syntheses[$lig->no_gep][$cycle]["title"])) ? $tab_syntheses[$lig->no_gep][$cycle]["title"] : "").">
 			<strong>Synthèse&nbsp;:</strong> 
-			<input type='hidden' name='indice_synthese[]' value=\"".$lig->no_gep."|".$tab_cycle[$mef_code_ele]."\" />
+			<input type='hidden' name='indice_synthese[]' value=\"".$lig->no_gep."|".$cycle."\" />
 			<textarea style='vertical-align:top;' 
 					cols='80' 
 					rows='4' 
-					name=\"no_anti_inject_synthese_".$lig->no_gep."_".$tab_cycle[$mef_code_ele]."\">".
-					((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"])) ? $tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"] : "").
+					name=\"no_anti_inject_synthese_".$lig->no_gep."_".$cycle."\">".
+					((isset($tab_syntheses[$lig->no_gep][$cycle]["synthese"])) ? $tab_syntheses[$lig->no_gep][$cycle]["synthese"] : "").
 			"</textarea>
 		</p>";
 				}
 				else {
 					echo "
-		<p".((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"])) ? $tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["title"] : "")."><strong>Synthèse&nbsp;:</strong> ".((isset($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"])) ? nl2br($tab_syntheses[$lig->no_gep][$tab_cycle[$mef_code_ele]]["synthese"]) : "<span style='color:red'>Vide</span>")."</p>";
+		<p".((isset($tab_syntheses[$lig->no_gep][$cycle]["title"])) ? $tab_syntheses[$lig->no_gep][$cycle]["title"] : "")."><strong>Synthèse&nbsp;:</strong> ".((isset($tab_syntheses[$lig->no_gep][$cycle]["synthese"])) ? nl2br($tab_syntheses[$lig->no_gep][$cycle]["synthese"]) : "<span style='color:red'>Vide</span>")."</p>";
 				}
 
 				$cpt_ele++;
@@ -1574,6 +1744,12 @@ elseif(isset($id_classe)) {
 		}
 
 		if($SocleOuvertureSaisieComposantes=="y") {
+
+			if(isset($cycle_particulier)) {
+				echo "
+		<input type='hidden' name='cycle_particulier' value='".$cycle_particulier."' />";
+			}
+
 			echo "
 		<input type='hidden' name='enregistrer_saisies' value='y' />
 		<input type='hidden' name='id_classe' value='$id_classe' />
@@ -1585,6 +1761,7 @@ elseif(isset($id_classe)) {
 		</div>
 
 		<script type='text/javascript'>
+			".js_checkbox_change_style()."
 
 			function coche_colonne_ele(cpt_ele, niveau_maitrise) {
 				for(i=0;i<8;i++) {
@@ -1629,6 +1806,12 @@ elseif(isset($id_classe)) {
 					maj_couleurs_maitrise(i, j);
 				}
 			}
+
+			checkbox_change('cycle_VIDE');
+			checkbox_change('cycle_2');
+			checkbox_change('cycle_3');
+			checkbox_change('cycle_4');
+			document.getElementById('form_choix_cycle').style.display='';
 		</script>";
 		}
 		echo "

@@ -102,7 +102,7 @@ $xml->appendChild($items);
 				$attResponsableEtabId->value = "RESP_".$responsable->id;
 				$noeudResponsableEtab->appendChild($attResponsableEtabId);
 				$attResponsableEtabLibelle= $xml->createAttribute('libelle');
-				$attResponsableEtabLibelle->value = $responsable->suivi_par;
+				$attResponsableEtabLibelle->value = trim($responsable->suivi_par);
 				$noeudResponsableEtab->appendChild($attResponsableEtabLibelle);
 				$responsablesEtab->appendChild($noeudResponsableEtab);
 			}
@@ -110,7 +110,26 @@ $xml->appendChild($items);
 		$donnees->appendChild($responsablesEtab);
 		
 		/*----- Élèves -----*/
-		//$tab_ele_deja=array();
+		$tab_ele_deja=array();
+		$tab_ele_derniere_classe=array();
+
+		// 20170531
+		// Tester les doublons élèves, pour retenir la classe de la dernière période.
+		while ($eleve = $listeEleves->fetch_object()) {
+			if(!in_array('EL_'.$eleve->id_eleve, $tab_ele_deja)) {
+				// Récupérer la dernière classe de l'élève.
+				$sql="SELECT classe FROM classes c, j_eleves_classes jec WHERE c.id=jec.id_classe AND jec.login='".$eleve->login."' ORDER BY jec.periode DESC LIMIT 1;";
+				$res_class_tmp=mysqli_query($mysqli, $sql);
+				if(mysqli_num_rows($res_class_tmp)>0) {
+					$lig_class_tmp=mysqli_fetch_object($res_class_tmp);
+					$tab_ele_derniere_classe[$eleve->login]=$lig_class_tmp->classe;
+				}
+			}
+			$tab_ele_deja[]='EL_'.$eleve->id_eleve;
+		}
+		mysqli_data_seek($listeEleves, 0);
+
+		$tab_ele_deja=array();
 		$eleves = $xml->createElement('eleves');
 		while ($eleve = $listeEleves->fetch_object()) {
 			$noeudEleve = $xml->createElement('eleve');
@@ -119,24 +138,30 @@ $xml->appendChild($items);
 				$msg_erreur_remplissage.="L'élève ".$eleve->nom." ".$eleve->prenom." n'est pas associé à un élève dans Sconet <em>(Identifiant ELE_ID non valide)</em>&nbsp;: <a href='../responsables/corrige_ele_id.php' target='_blank'>Corriger</a><br /><br />";
 			}
 
+			$tmp_classe=$eleve->classe;
+			if((!getSettingANon("LSU_LastDivEleve"))&&(isset($tab_ele_derniere_classe[$eleve->login]))) {
+				$tmp_classe=$tab_ele_derniere_classe[$eleve->login];
+			}
+
 			$attributsEleve = array('id'=>'EL_'.$eleve->id_eleve,'id-be'=>$eleve->ele_id,
-				'nom'=>substr($eleve->nom,0,100),
-				'prenom'=>substr($eleve->prenom,0,100),
-				'code-division'=>substr($eleve->classe,0,8));
+				'nom'=>mb_substr($eleve->nom,0,100,'UTF-8'),
+				'prenom'=>mb_substr($eleve->prenom,0,100,'UTF-8'),
+				'code-division'=>mb_substr($tmp_classe,0,8,'UTF-8'));
 			foreach ($attributsEleve as $cle=>$valeur) {
 				$attEleve = $xml->createAttribute($cle);
 				$attEleve->value = $valeur;
 				$noeudEleve->appendChild($attEleve);
 			}
 
-			$eleves->appendChild($noeudEleve);
-
-			/*
 			if(in_array('EL_'.$eleve->id_eleve, $tab_ele_deja)) {
-				$msg_erreur_remplissage.="";
+				//$msg_erreur_remplissage.="<strong>ATTENTION&nbsp;:</strong> L'élève ".'EL_'.$eleve->id_eleve." (<a href='../eleves/modify_eleve.php?eleve_login=".$eleve->login."' target='_blank'>".$eleve->nom." ".$eleve->prenom."</a>) apparait plusieurs fois. Cela correspond probablement à un changement de classe.<br />L'export ne va pas être valide. Il faut exporter séparément les classes de cet élève.<br /><br />";
+				$msg_erreur_remplissage.="<strong>ATTENTION&nbsp;:</strong> L'élève ".'EL_'.$eleve->id_eleve." (<a href='../eleves/modify_eleve.php?eleve_login=".$eleve->login."' target='_blank'>".$eleve->nom." ".$eleve->prenom."</a>) apparait plusieurs fois. Cela correspond probablement à un changement de classe.<br />La dernière classe de l'élève sera retenue dans l'export.<br /><br />";
+			}
+			else {
+				$eleves->appendChild($noeudEleve);
 			}
 			$tab_ele_deja[]='EL_'.$eleve->id_eleve;
-			*/
+			
 		}
 		$donnees->appendChild($eleves);
 		
@@ -164,10 +189,10 @@ $xml->appendChild($items);
 					//if($discipline->id < 10) {$id_discipline = "0".$discipline->id;} else {$id_discipline = $discipline->id;}
 				$codesAutorises = array('S', 'O', 'F', 'L', 'R', 'X');
 				if (!in_array($discipline->code_modalite_elect, $codesAutorises)) {
-					$msgErreur .= "La matière $discipline->nom_complet a pour modalité $discipline->code_modalite_elect. Cette modalité n'est pas autorisée. <a href='../gestion/gerer_modalites_election_enseignements.php' target='_blank'>Corriger</a> / <a href='../utilisateurs/modif_par_lots.php#update_xml_sts' target='_BLANK' >mettre à jour d'après le XML STS</a>.<br />";
+					$msgErreur .= "La matière $discipline->nom_complet a pour modalité $discipline->code_modalite_elect. Cette modalité n'est pas autorisée. <a href='../gestion/gerer_modalites_election_enseignements.php' target='_blank'>Corriger</a> / <a href='../utilisateurs/modif_par_lots.php#update_xml_sts' target='_BLANK' >mettre à jour d'après le XML STS</a>.<br /><br />";
 				}
 				if($discipline->code_matiere=="") {
-					$msgErreur .= "La matière ".$discipline->nom_complet." a un code vide <em>(non rattaché à une <strong>nomenclature</strong>)</em>. Le XML ne va pas être valide. <a href='../matieres/modify_matiere.php?current_matiere=".$discipline->id_matiere."' target='_blank'>Corriger</a>.<br />";
+					$msgErreur .= "La matière ".$discipline->nom_complet." a un code vide <em>(non rattaché à une <strong>nomenclature</strong>)</em>. Le XML ne va pas être valide. <a href='../matieres/modify_matiere.php?current_matiere=".$discipline->id_matiere."' target='_blank'>Corriger</a>.<br /><br />";
 				}
 				else {
 
@@ -190,7 +215,7 @@ $xml->appendChild($items);
 							}
 							$info_matieres.=")</em>";
 						}
-						$msg_erreur_remplissage.="Plusieurs enseignements de <b>".$nom_matiere."</b> avec la même modalité (".$discipline->code_modalite_elect.").<br />Cela peut arriver quand une même nomenclature matière est associée à plusieurs matières et que les différentes matières sont extraites avec la même modalité dans un export XML".$info_matieres.".<br />Ce n'est pas possible.<br />Il faut corriger.<br />";
+						$msg_erreur_remplissage.="Plusieurs enseignements de <b>".$nom_matiere."</b> avec la même modalité (".$discipline->code_modalite_elect.").<br />Cela peut arriver quand une même nomenclature matière est associée à plusieurs matières et que les différentes matières sont extraites avec la même modalité dans un export XML".$info_matieres.".<br />Ce n'est pas possible.<br />Il faut corriger.<br /><br />";
 					}
 					$tab_disciplines_global_deja[]=$matiere;
 				}
@@ -219,16 +244,35 @@ $xml->appendChild($items);
 						
 					//on ne conserve que les chiffres pour id-sts
 					if (!$enseignant->numind) {
-						$msgErreur .= $enseignant->nom." ".$enseignant->prenom." n'a pas d'identifiant STS, vous devez corriger cette erreur avant de continuer&nbsp;: <em><a href=\"../utilisateurs/modify_user.php?user_login=".$enseignant->login."\" target=\"_BLANK\" >Corriger</a></em><br />";
+						$msgErreur .= $enseignant->nom." ".$enseignant->prenom." n'a pas d'identifiant STS, vous devez corriger cette erreur avant de continuer&nbsp;: <em><a href=\"../utilisateurs/modify_user.php?user_login=".$enseignant->login."\" target=\"_BLANK\" >Corriger</a></em><br /><br />";
 						continue;
 					}
-					if (!$enseignant->nom ) {
-						$msgErreur .= "L'enseignant $enseignant->numind n'a pas de nom, vous devez corriger cette erreur.<br />";
+					if((!$enseignant->nom)||($enseignant->nom=="")) {
+						$msgErreur .= "L'enseignant '$enseignant->numind' n'a pas de nom, vous devez <a href='../utilisateurs/modify_user.php?user_login=".$enseignant->login."' target='_blank'>corriger</a> cette erreur.<br /><br />";
+						continue;
 					}
-					if (!$enseignant->prenom) {
-						$msgErreur .= "L'enseignant $enseignant->nom ($enseignant->numind) n'a pas de nom, vous devez corriger cette erreur.<br />";
+					if((!$enseignant->prenom)||($enseignant->prenom=="")) {
+						$msgErreur .= "L'enseignant $enseignant->nom ($enseignant->numind) n'a pas de prénom, vous devez <a href='../utilisateurs/modify_user.php?user_login=".$enseignant->login."' target='_blank'>corriger</a> cette erreur.<br /><br />";
+						continue;
 					}
+
+					if((preg_match_all('#[0-9]+#',$enseignant->numind))&&(substr($enseignant->numind,1)==0)) {
+						$msgErreur .= $enseignant->nom." ".$enseignant->prenom." a un identifiant STS non valide (".$enseignant->numind."). Cela doit être P suivi d'un entier non nul.<br />Vous devez corriger cette erreur avant de continuer&nbsp;: <em><a href=\"../utilisateurs/modify_user.php?user_login=".$enseignant->login."\" target=\"_BLANK\" >Corriger</a></em><br /><br />";
+						continue;
+					}
+
 					preg_match_all('#[0-9]+#',$enseignant->numind,$extract);
+					/*
+					echo "$enseignant->numind<pre>";
+					print_r($enseignant);
+					print_r($extract);
+					echo "</pre>";
+					*/
+					if((!isset($extract[0]))||(!isset($extract[0][0]))) {
+						$msgErreur .= "Le format de l'identifiant NUMIND de ".$enseignant->nom." ".$enseignant->prenom." n'est pas valide.<br />Ce doit être un <strong>P</strong> suivi d'<strong>un ou plusieurs chiffres</strong>; vous devez corriger cette erreur avant de continuer&nbsp;: <em><a href=\"../utilisateurs/modify_user.php?user_login=".$enseignant->login."\" target=\"_BLANK\" >Corriger</a></em><br /><br />";
+						continue;
+					}
+
 					$idSts = $extract[0][0];
 					$type = $enseignant->type ? $enseignant->type : "local";
 					$civilite = $enseignant->civilite == "Mme" ? 'MME' : 'M' ;
@@ -256,7 +300,7 @@ $xml->appendChild($items);
 			$elementsProgramme->appendChild($noeudPasEP);
 		while ($elementProgramme = $listeElementsProgramme->fetch_object()) {
 			$noeudElementProgramme = $xml->createElement('element-programme');
-			$elePro = trim($elementProgramme->libelle) ? substr(htmlspecialchars($elementProgramme->libelle),0,300) : "-";
+			$elePro = trim($elementProgramme->libelle) ? mb_substr(htmlspecialchars($elementProgramme->libelle),0,300,'UTF-8') : "-";
 			$attributsElementProgramme = array('id'=>'EP_'.$elementProgramme->id, 'libelle'=>$elePro);
 			foreach ($attributsElementProgramme as $cle=>$valeur) {
 				$attElementProgramme = $xml->createAttribute($cle);
@@ -275,7 +319,7 @@ if (getSettingValue("LSU_Parcours") != "n") {
 				$noeudParcoursCommun= $xml->createElement('parcours-commun');
 					if($parcoursCommun->periode < 10) {$num_periode = "0".$parcoursCommun->periode;} else {$num_periode = $parcoursCommun->periode;}
 					$parcoursClasse = getClasses($parcoursCommun->classe)->fetch_object()->classe;
-					$attributsParcoursCommun = array('periode-ref'=>'P_'.$num_periode, 'code-division'=>substr(htmlspecialchars($parcoursClasse),0,8));
+					$attributsParcoursCommun = array('periode-ref'=>'P_'.$num_periode, 'code-division'=>mb_substr(htmlspecialchars($parcoursClasse),0,8,'UTF-8'));
 					foreach ($attributsParcoursCommun as $cle=>$valeur) {
 						$attParcoursCommun = $xml->createAttribute($cle);
 						$attParcoursCommun->value = $valeur;
@@ -318,7 +362,7 @@ if (getSettingAOui("LSU_commentaire_vie_sco")) {
 				$noeudVieSco->appendChild($attVieSco);
 			}
 			$tmp_chaine=nettoye_texte_vers_chaine($vieScoCommun->appreciation);
-			$comVieSco = substr(trim($tmp_chaine),0,600);
+			$comVieSco = ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8'));
 			//echo "-".$VieScoCommun."-";
 			if (!$comVieSco) {
 				$comVieSco = "-";
@@ -347,13 +391,33 @@ if (getSettingValue("LSU_traite_EPI") != "n") {
 				$noeudEpiCommun = $xml->createElement('epi');
 				$matieres = getMatieresEPICommun($epiCommun->id);
 				$refDisciplines = "";
+				$cpt_disc_epi=0;
 				foreach ($matieres as $matiere) {
 					$ref = "DI_".getMatiereOnMatiere($matiere["id_matiere"])->code_matiere.$matiere["modalite"];
 					assureDisciplinePresente($ref);
 					$refDisciplines .= $ref." ";
-	
-	
+					$cpt_disc_epi++;
 				}
+				if($cpt_disc_epi<=1) {
+					$msg_erreur_remplissage.="EPI n°".$epiCommun->id."&nbsp;: Un EPI nécessite au moins 2 matières associées. <a href='#ancre_EPI_".$epiCommun->id."'>Corriger</a> plus bas dans la page.<br /><br />";
+				}
+
+				if($epiCommun->intituleEpi=="") {
+					$msg_erreur_remplissage.="EPI n°".$epiCommun->id."&nbsp;: Intitulé non défini. <a href='#ancre_EPI_".$epiCommun->id."'>Corrigez</a> dans la présente page.<br /><br />";
+				}
+
+				if($epiCommun->codeEPI=="") {
+					$msg_erreur_remplissage.="EPI n°".$epiCommun->id."&nbsp;: Thématique non définie. <a href='#ancre_EPI_".$epiCommun->id."'>Corrigez</a> dans la présente page.<br /><br />";
+				}
+
+				if($refDisciplines=="") {
+					$msg_erreur_remplissage.="EPI n°".$epiCommun->id."&nbsp;: Aucune matière n'est associée. <a href='#ancre_EPI_".$epiCommun->id."'>Corrigez</a> dans la présente page.<br /><br />";
+				}
+
+				if(nettoye_texte_vers_chaine($epiCommun->descriptionEpi)=="") {
+					$msg_erreur_remplissage.="EPI n°".$epiCommun->id."&nbsp;: Description vide. <a href='#ancre_EPI_".$epiCommun->id."'>Corrigez</a> dans la présente page.<br /><br />";
+				}
+
 				$attributsEpiCommun = array('id'=>"EPI_$epiCommun->id", 'intitule'=>"$epiCommun->intituleEpi", 'thematique'=>"$epiCommun->codeEPI", 'discipline-refs'=>"$refDisciplines");
 				foreach ($attributsEpiCommun as $cle=>$valeur) {
 					$attsEpiCommun = $xml->createAttribute($cle);
@@ -384,7 +448,19 @@ if (getSettingValue("LSU_traite_EPI") != "n") {
 				else {
 					$noeudEpisGroupes = $xml->createElement('epi-groupe');
 					//id="EPI_GROUPE_02"
-					$attributsEpiGroupe = array('id'=>"EPI_GROUPE_".$episGroupe->id, 'intitule'=>$episGroupe->nom, 'epi-ref'=>'EPI_'.$episGroupe->id_epi );
+					/*
+					echo "<p>\$episGroupe->id=$episGroupe->id</p><pre>";
+					print_r($episGroupe);
+					echo "</pre>";
+					*/
+					if($episGroupe->nom=="") {
+						$msg_erreur_remplissage.="<strong>ANOMALIE&nbsp;:</strong> Un AID a un nom vide&nbsp;: <a href='../aid/modif_fiches.php?aid_id=".$episGroupe->id."&indice_aid=".$episGroupe->indice_aid."&action=modif&retour=index2.php' target='_blank'>AID n°".$episGroupe->id."</a>.<br />";
+						$tmp_nom_AID="AID n°".$episGroupe->id;
+					}
+					else {
+						$tmp_nom_AID=$episGroupe->nom;
+					}
+					$attributsEpiGroupe = array('id'=>"EPI_GROUPE_".$episGroupe->id, 'intitule'=>$tmp_nom_AID, 'epi-ref'=>'EPI_'.$episGroupe->id_epi );
 					foreach ($attributsEpiGroupe as $cle=>$valeur) {
 						$attsEpiGroupe = $xml->createAttribute($cle);
 						$attsEpiGroupe->value = $valeur;
@@ -405,7 +481,7 @@ if (getSettingValue("LSU_traite_EPI") != "n") {
 					
 					}
 					$tmp_chaine=nettoye_texte_vers_chaine($CommentaireEPI1);
-					$CommentaireEPI = substr($tmp_chaine, 0, 600);
+					$CommentaireEPI = ensure_utf8(mb_substr($tmp_chaine, 0, 600,'UTF-8'));
 					//echo $CommentaireEPI;
 					if ($CommentaireEPI) {
 						$noeudEpisGroupesCommentaire = $xml->createElement('commentaire',$CommentaireEPI);
@@ -490,14 +566,15 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 			while ($matiere = $disciplines->fetch_object()) {
 				$matieresAP .= "DI_".$matiere->id_enseignements.$matiere->modalite." ";
 			}
-			$attributsAPCommun = array('id'=>'ACC_PERSO_'.$apCommun->id , 'intitule'=>  substr(trim($apCommun->intituleAP), 0, 150) , 'discipline-refs'=>"$matieresAP");
+			$attributsAPCommun = array('id'=>'ACC_PERSO_'.$apCommun->id , 'intitule'=>  mb_substr(trim($apCommun->intituleAP), 0, 150,'UTF-8') , 'discipline-refs'=>"$matieresAP");
 			foreach ($attributsAPCommun as $cle=>$valeur) {
 				$attsApCommun = $xml->createAttribute($cle);
 				$attsApCommun->value = $valeur;
 				$noeudApCommun->appendChild($attsApCommun);
 			}
-			if (substr(trim($apCommun->descriptionAP),0,600)) {
-				$noeudApDescription = $xml->createElement('description', substr(trim($apCommun->descriptionAP),0,600));
+			$tmp_descriptionAP=trim(ensure_utf8(mb_substr(trim($apCommun->descriptionAP),0,600,'UTF-8')));
+			if ($tmp_descriptionAP!="") {
+				$noeudApDescription = $xml->createElement('description', $tmp_descriptionAP);
 				$noeudApCommun->appendChild($noeudApDescription);
 			}
 			
@@ -532,7 +609,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 				}
 				if (trim($commentaires)) {
 					$tmp_chaine=nettoye_texte_vers_chaine($commentaires);
-					$noeudComGroupeAp = $xml->createElement('commentaire',substr(trim($commentaires),0,600));
+					$noeudComGroupeAp = $xml->createElement('commentaire',ensure_utf8(mb_substr(trim($commentaires),0,600,'UTF-8')));
 					$noeudApGroupes->appendChild($noeudComGroupeAp);
 				}
 			}
@@ -583,11 +660,20 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 		$tab_id_eleve=array();
 		$tab_eleve_sans_pp=array();
 		$eleves = getElevesExport();
+
+		// Si retour vide, ajouter un test sur les éléments de la requête pour trouver où cela plante.
+		if(mysqli_num_rows($eleves)==0) {
+			$msg_erreur_remplissage.="Aucun élève n'a été trouvé. Commencez par valider le formulaire <strong>Responsables de l'établissement</strong> en cliquant sur <strong>Mettre à jour</strong><br />";
+		}
+
 		while ($eleve = $eleves->fetch_object()) {
 			$exporteEleve = FALSE;
 			$desAcquis = FALSE;
 			$noeudBilanElevePeriodique = $xml->createElement('bilan-periodique');
 			$respEtabElv = "RESP_".$eleve->id_resp_etab;
+
+//echo "DEBUG: \$eleve->login=".$eleve->login."<br />";
+
 
 			$profResponsable="";
 			//$profResponsable = getUtilisateur($eleve->professeur)->numind;
@@ -626,6 +712,8 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 				$attsElevePeriode->value = $valeur;
 
 				$noeudBilanElevePeriodique->appendChild($attsElevePeriode);
+//echo "DEBUG:     Préparation du noeud: $cle : $valeur<br />";
+
 			}
 
 			$tab_disciplines_deja=array();
@@ -643,6 +731,8 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 				$moyenne = getMoyenne($acquisEleve->id_groupe);
 				$modalite = getModalite($acquisEleve->id_groupe, $eleve->login, $acquisEleve->mef_code, $acquisEleve->code_matiere);
 				$matiere = "DI_".$acquisEleve->code_matiere.$modalite;
+
+//echo "DEBUG:     Acquis: $acquisEleve->id_groupe<br />";
 
 				if(($debug==1)&&($eleve->login==$login_debug)&&($acquisEleve->code_matiere==$code_matiere_debug)) {
 					echo "$matiere groupe $acquisEleve->id_groupe<br />getModalite($acquisEleve->id_groupe, $eleve->login, $acquisEleve->mef_code, $acquisEleve->code_matiere)<br />";
@@ -718,7 +808,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 					
 				}
 				$tmp_chaine=nettoye_texte_vers_chaine($acquisEleve->appreciation);
-				$noeudAcquisAppreciation = $xml->createElement('appreciation' ,substr(trim($tmp_chaine),0,600));
+				$noeudAcquisAppreciation = $xml->createElement('appreciation' ,ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 				$noeudAcquis->appendChild($noeudAcquisAppreciation);
 				$listeAcquis->appendChild($noeudAcquis);
 			}
@@ -806,7 +896,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 					// Apparemment, on ne récupère que les enseignements avec appréciation non vide... Exact?
 					$msg_erreur_remplissage.="L'appréciation de <strong>".get_nom_prenom_eleve($eleve->login)."</strong> est vide en ".get_info_grp($acquisEleve->id_groupe)." pour la période <strong>".$eleve->periode."</strong>".$lien_bull_simp.".<br />Le <strong>professeur</strong> peut corriger si la période est ouverte en saisie. Sinon, l'opération est possible avec un compte de statut <strong>secours</strong>.<br /><br />";
 				}
-				$noeudAcquisAppreciation = $xml->createElement('appreciation' ,substr(trim($tmp_chaine),0,600));
+				$noeudAcquisAppreciation = $xml->createElement('appreciation' ,ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 				$noeudAcquis->appendChild($noeudAcquisAppreciation);
 				$listeAcquis->appendChild($noeudAcquis);
 			}
@@ -875,7 +965,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 
 					$msg_erreur_remplissage.="L'appréciation de <strong>".get_nom_prenom_eleve($eleve->login)."</strong> est vide en ".get_info_grp($acquisEleve->id_groupe)." pour la période <strong>".$eleve->periode."</strong>".$lien_bull_simp.".<br />Le <strong>professeur</strong> peut corriger si la période est ouverte en saisie. Sinon, l'opération est possible avec un compte de statut <strong>secours</strong>.<br /><br />";
 
-					$noeudAcquisAppreciation = $xml->createElement('appreciation' ,substr(trim($tmp_chaine),0,600));
+					$noeudAcquisAppreciation = $xml->createElement('appreciation' ,ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 					$noeudAcquis->appendChild($noeudAcquisAppreciation);
 					$listeAcquis->appendChild($noeudAcquis);
 
@@ -949,7 +1039,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 
 					$msg_erreur_remplissage.="La note de <strong>".get_nom_prenom_eleve($eleve->login)."</strong> est vide en ".get_info_grp($acquisEleve->id_groupe)." pour la période <strong>".$eleve->periode."</strong>".$lien_bull_simp.".<br />Le <strong>professeur</strong> peut corriger si la période est ouverte en saisie. Sinon, l'opération est possible avec un compte de statut <strong>secours</strong>.<br /><br />";
 
-					$noeudAcquisAppreciation = $xml->createElement('appreciation' ,substr(trim($tmp_chaine),0,600));
+					$noeudAcquisAppreciation = $xml->createElement('appreciation' ,ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 					$noeudAcquis->appendChild($noeudAcquisAppreciation);
 					$listeAcquis->appendChild($noeudAcquis);
 
@@ -986,7 +1076,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 							$commentaireEpiElv = getCommentaireAidElv($eleve->login, $epiEleve->id_aid, $eleve->periode);
 							if ($commentaireEpiElv->num_rows) {
 								$tmp_chaine=nettoye_texte_vers_chaine($commentaireEpiElv->fetch_object()->appreciation);
-								$comm = substr(trim($tmp_chaine),0,600);
+								$comm = ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8'));
 								if ($comm) {
 									$noeudComEpiEleve = $xml->createElement('commentaire', $comm);
 									$noeudEpiEleve->appendChild($noeudComEpiEleve);
@@ -1021,7 +1111,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 							$commentaireAPEleve = getCommentaireAidElv($eleve->login, $accPersosEleve->id_aid, $eleve->periode);
 							if ($commentaireAPEleve->num_rows) {
 								$tmp_chaine=nettoye_texte_vers_chaine($commentaireAPEleve->fetch_object()->appreciation);
-								$comm = substr(trim($tmp_chaine),0,600);
+								$comm = ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8'));
 								if ($comm) {
 									$noeudComApEleve = $xml->createElement('commentaire', $comm);
 									$noeudAPEleve->appendChild($noeudComApEleve);
@@ -1064,7 +1154,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 								$commentaireEleve = getCommentaireEleveParcours($eleve->login,$parcoursElv->id_aid, $eleve->periode);//
 								if ($commentaireEleve->num_rows) {
 									$tmp_chaine=nettoye_texte_vers_chaine($commentaireEleve->fetch_object()->appreciation);
-									$commentaireEleve = substr(trim($tmp_chaine),0,600);
+									$commentaireEleve = ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8'));
 									if (strlen($commentaireEleve)) {
 										$noeudParcoursEleve = $xml->createElement('parcours',$commentaireEleve);
 										$attsParcoursEleve = $xml->createAttribute('code');
@@ -1074,7 +1164,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 										$creeParcours = TRUE;
 									}
 
-								}							
+								}
 							}
 						}
 					}
@@ -1109,7 +1199,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 					($tab_modalites_accompagnement_eleve[$loop_modalite]["commentaire"]!="")) {
 						$tmp_chaine=nettoye_texte_vers_chaine($tab_modalites_accompagnement_eleve[$loop_modalite]["commentaire"]);
 						if(trim($tmp_chaine)!="") {
-							$complement_ppre=$xml->createElement('complement-ppre' ,substr(trim($tmp_chaine),0,600));
+							$complement_ppre=$xml->createElement('complement-ppre' ,ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 							$modaliteAcc->appendChild($complement_ppre);
 						}
 					}
@@ -1140,7 +1230,8 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 					$msg_erreur_remplissage.="Aucun avis du conseil de classe n'est saisi pour <strong>".get_nom_prenom_eleve($eleve->login)."</strong> pour la période <strong>".$eleve->periode."</strong>".$lien_bull_simp.".<br />Les saisies concernant cet élève ne seront pas extraites et donc pas remontées vers LSU.<br />Un compte scolarité, professeur principal,... <em>(selon les droits d'accès paramétrés)</em> peut corriger si la période est ouverte en saisie. Sinon, l'opération est possible avec un compte de statut <strong>secours</strong>.<br /><br />";
 				}
 				else {
-					$acquisConseils = $xml->createElement('acquis-conseils', $avisConseil);
+					$tmp_chaine=nettoye_texte_vers_chaine($avisConseil);
+					$acquisConseils = $xml->createElement('acquis-conseils', ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 					$noeudBilanElevePeriodique->appendChild($acquisConseils);
 				}
 			}
@@ -1150,7 +1241,20 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 			$retardEleve = getAbsencesEleve($eleve->login , $eleve->periode);
 			$vieScolaire = $xml->createElement('vie-scolaire');
 			$retardsJustifies = $retardEleve['absences'] - $retardEleve['nj'];
+
 			//$attributsVieScolaire = array('nb-retards'=>$retardEleve->nb_retards , 'nb-abs-justifiees'=>$retardsJustifies, 'nb-abs-injustifiees'=>$retardEleve->non_justifie);
+			if(!preg_match("/^[0-9]{1,}$/", $retardEleve['retards'])) {
+				$msg_erreur_remplissage.="Le nombre de retards pour <strong>".get_nom_prenom_eleve($eleve->login)."</strong> en période <strong>".$eleve->periode."</strong> est invalide (".$retardEleve['retards'].").<br />Valeur mise à zéro dans l'export pour ne pas provoquer d'erreur (mais vous devriez corriger).<br /><br />";
+				$retardEleve['retards']=0;
+			}
+			if(!preg_match("/^[0-9]{1,}$/", $retardsJustifies)) {
+				$msg_erreur_remplissage.="Le nombre d'absences justifiées pour <strong>".get_nom_prenom_eleve($eleve->login)."</strong> en période <strong>".$eleve->periode."</strong> est invalide (".$retardsJustifies.").<br />Valeur mise à zéro dans l'export pour ne pas provoquer d'erreur (mais vous devriez corriger).<br /><br />";
+				$retardsJustifies=0;
+			}
+			if(!preg_match("/^[0-9]{1,}$/", $retardEleve['nj'])) {
+				$msg_erreur_remplissage.="Le nombre de retards pour <strong>".get_nom_prenom_eleve($eleve->login)."</strong> en période <strong>".$eleve->periode."</strong> est invalide (".$retardEleve['nj'].").<br />Valeur mise à zéro dans l'export pour ne pas provoquer d'erreur (mais vous devriez corriger).<br /><br />";
+				$retardEleve['nj']=0;
+			}
 			$attributsVieScolaire = array('nb-retards'=>$retardEleve['retards'] , 'nb-abs-justifiees'=>$retardsJustifies, 'nb-abs-injustifiees'=>$retardEleve['nj']);
 		
 			foreach ($attributsVieScolaire as $cle=>$valeur) {
@@ -1161,7 +1265,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 			if (trim($retardEleve['appreciation']) && getSettingAOui("LSU_commentaire_vie_sco")) {
 				// non obligatoire
 				$tmp_chaine=nettoye_texte_vers_chaine($retardEleve['appreciation']);
-				$comVieSco = $xml->createElement('commentaire', substr(trim($tmp_chaine),0,600));
+				$comVieSco = $xml->createElement('commentaire', ensure_utf8(mb_substr(trim($tmp_chaine),0,600,'UTF-8')));
 				$vieScolaire->appendChild($comVieSco);
 			}
 		
@@ -1181,7 +1285,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 				}
 
 				$tab_positionnement_trouve=array();
-				$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e WHERE sec.ine=e.no_gep AND e.ele_id='".$eleve->ele_id."' AND sec.cycle='".$tab_cycle[$mef_code_ele]."' AND periode='".$eleve->periode."';";
+				$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e WHERE sec.ine=e.no_gep AND e.ele_id='".$eleve->ele_id."' AND sec.cycle='".$tab_cycle[$mef_code_ele]."' AND periode='".$eleve->periode."' AND annee='".$millesime."';";
 				$res_ele_socle=mysqli_query($GLOBALS["mysqli"], $sql);
 				if(mysqli_num_rows($res_ele_socle)>0) {
 					while($lig_ele_socle=mysqli_fetch_object($res_ele_socle)) {
@@ -1276,14 +1380,19 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 					$msg_erreur_remplissage.="L'élève <strong>".get_nom_prenom_eleve($eleve->login)."</strong> (EL_".$eleve->id_eleve."_".$eleve->periode.") est inscrit plusieurs fois en période EL_".$eleve->id_eleve.".<br />Cela correspond probablement à un changement de classe en cours d'année.<br />Il faudrait exporter les différentes classes de l'élève en plusieurs fois&nbsp;: un fichier XML par classe de l'élève.<br /><br />";
 				}
 
-				$bilansPeriodiques->appendChild($noeudBilanElevePeriodique);
-
 				$tab_id_eleve[]="EL_".$eleve->id_eleve."_".$eleve->periode;
+
+				$bilansPeriodiques->appendChild($noeudBilanElevePeriodique);
 			}
 		}	
 		$donnees->appendChild($bilansPeriodiques);
 
-
+		/*
+		echo "<pre>";
+		sort($tab_id_eleve);
+		print_r($tab_id_eleve);
+		echo "</pre>";
+		*/
 	/*
 		// Bilans de fin de cycle
 
@@ -1348,7 +1457,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 				$niveau_eleve_courant=$tmp_tab_cycle_niveau["mef_niveau"];
 
 				if($tab_cycle[$mef_code_ele]=="") {
-					$msg_erreur_remplissage.="Cycle courant de ".$eleve->nom." ".$eleve->prenom." en classe de ".get_chaine_liste_noms_classes_from_ele_login($eleve->login)." non identifié.<br /><br />";
+					$msg_erreur_remplissage.="Cycle courant de <a href='../eleves/visu_eleve.php?ele_login=".$eleve->login."' target='_blank'>".$eleve->nom." ".$eleve->prenom."</a> ($mef_code_ele) en classe de ".get_chaine_liste_noms_classes_from_ele_login($eleve->login)." non identifié (<a href='../mef/associer_eleve_mef.php?type_selection=nom_eleve&nom_eleve=".preg_replace("/^[^A-Za-z0-9 _]*$/", "%", $eleve->nom)."' target='_blank'>Mef élève</a> <a href='../mef/admin_mef.php' target='_blank' title=\"Contrôler tous les MEFS\"><img src='../images/icons/configure.png' class='icone16' alt='Config' /></a>).<br /><br />";
 					//$generer_bilan_pour_cet_eleve=false;
 				}
 
@@ -1440,11 +1549,12 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 
 						// Récupération des positionnements dans les domaines du socle
 						$tab_positionnement_trouve=array();
-						$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e WHERE sec.ine=e.no_gep AND e.ele_id='".$eleve->ele_id."' AND sec.cycle='".$tab_cycle[$mef_code_ele]."' AND niveau_maitrise!='' AND niveau_maitrise!='0' ORDER BY sec.periode;";
+						$sql="SELECT DISTINCT sec.* FROM socle_eleves_composantes sec, eleves e WHERE sec.ine=e.no_gep AND e.ele_id='".$eleve->ele_id."' AND sec.cycle='".$tab_cycle[$mef_code_ele]."' AND sec.niveau_maitrise!='' AND sec.niveau_maitrise!='0' AND sec.annee='".$millesime."' ORDER BY sec.annee, sec.periode;";
 						//echo "$sql<br />";
 						$res_ele_socle=mysqli_query($GLOBALS["mysqli"], $sql);
 						if(mysqli_num_rows($res_ele_socle)>0) {
 							$tab_positionnement_domaine=array();
+							// En faisant plusieurs tours par période, on va écraser et retenir le dernier niveau validé.
 							while($lig_ele_socle=mysqli_fetch_object($res_ele_socle)) {
 								$tab_positionnement_domaine[$lig_ele_socle->code_composante]=$lig_ele_socle->niveau_maitrise;
 							}
@@ -1475,7 +1585,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 							$noeudBilanEleveFinCycle->appendChild($socle);
 
 							// On vérifie aussi qu'on a une synthèse:
-							$sql="SELECT DISTINCT sec.* FROM socle_eleves_syntheses sec, eleves e WHERE sec.ine=e.no_gep AND e.ele_id='".$eleve->ele_id."' AND sec.cycle='".$tab_cycle[$mef_code_ele]."' AND sec.synthese!='';";
+							$sql="SELECT DISTINCT sec.* FROM socle_eleves_syntheses sec, eleves e WHERE sec.ine=e.no_gep AND e.ele_id='".$eleve->ele_id."' AND sec.cycle='".$tab_cycle[$mef_code_ele]."' AND sec.synthese!='' AND sec.annee='".$millesime."';";
 							//echo "$sql<br />";
 							$res_ele_synthese=mysqli_query($GLOBALS["mysqli"], $sql);
 							if(mysqli_num_rows($res_ele_synthese)>0) {
@@ -1504,11 +1614,13 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 							ou si on n'a pas d'enseignement de complément à remonter:
 							    <enseignement-complement code="AUC" />
 							*/
+							// Il ne faut retenir qu'un enseignement de complément
 							$sql="SELECT seec.*, jgec.code FROM j_groupes_enseignements_complement jgec, 
 										socle_eleves_enseignements_complements seec 
 									WHERE jgec.id_groupe=seec.id_groupe AND 
 										(seec.positionnement='1' OR seec.positionnement='2') AND 
-										seec.ine='".$eleve->no_gep."';";
+										seec.ine='".$eleve->no_gep."' 
+									ORDER BY seec.positionnement DESC LIMIT 1;";
 							//echo "$sql<br />";
 							$res_seec=mysqli_query($mysqli, $sql);
 							if(mysqli_num_rows($res_seec)>0) {
