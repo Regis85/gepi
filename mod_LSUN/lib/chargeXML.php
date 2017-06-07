@@ -728,7 +728,7 @@ if (getSettingValue("LSU_traite_AP") != "n") {
 				$desAcquis = TRUE;
 				$noeudAcquis = $xml->createElement('acquis');
 				$matiere = $acquisEleve->code_matiere;
-				$moyenne = getMoyenne($acquisEleve->id_groupe);
+				$moyenne = getMoyenne($acquisEleve->id_groupe, $eleve->periode);
 				$modalite = getModalite($acquisEleve->id_groupe, $eleve->login, $acquisEleve->mef_code, $acquisEleve->code_matiere);
 				$matiere = "DI_".$acquisEleve->code_matiere.$modalite;
 
